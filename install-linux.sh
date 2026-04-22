@@ -64,7 +64,7 @@ cat <<EOF > "$DESKTOP_DIR/zvr-grid.desktop"
 Name=Zažij VR GRID
 Comment=Hudební přehrávač GRID
 Exec=env WEBKIT_DISABLE_DMABUF_RENDERER=1 $APP_PATH
-Icon=zvr-grid
+Icon=$ICON_DIR/zvr-grid.png
 Terminal=false
 Type=Application
 Categories=AudioVideo;Audio;Player;
