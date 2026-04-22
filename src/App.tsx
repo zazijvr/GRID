@@ -1,6 +1,6 @@
 import React, { useRef, useState } from 'react';
 import { 
-  Play, Pause, SkipForward, SkipBack, Shuffle, Repeat, Repeat1, FolderPlus, FolderOpen, Minimize2, X, Trash2 
+  Play, Pause, SkipForward, SkipBack, Shuffle, Repeat, Repeat1, FolderPlus, FolderOpen, Trash2, Volume2, VolumeX 
 } from 'lucide-react';
 import { useAudioPlayer } from './hooks/useAudioPlayer';
 import { SpectrumVisualizer } from './components/SpectrumVisualizer';
@@ -25,6 +25,8 @@ function App() {
     cycleRepeat,
     toggleShuffle,
     seek,
+    volume,
+    setVolume,
     audioRef
   } = useAudioPlayer();
 
@@ -171,38 +173,60 @@ function App() {
       </div>
 
       {/* Controls */}
-      <div className="flex items-center justify-between px-6 py-5 shrink-0 bg-gradient-to-t from-slate-950/80 to-transparent">
-        <button 
-          onClick={toggleShuffle} 
-          className={`p-2 transition-all duration-300 rounded-full ${shuffle ? 'text-pink-500 bg-pink-500/10 shadow-[0_0_15px_rgba(248,0,255,0.4)] drop-shadow-[0_0_5px_#f800ff]' : 'text-slate-500 hover:text-cyan-400 hover:bg-cyan-500/10'}`}
-        >
-          <Shuffle size={18} />
-        </button>
-
-        <div className="flex items-center gap-5">
-          <button onClick={prevTrack} className="text-slate-300 hover:text-cyan-400 drop-shadow-md hover:drop-shadow-[0_0_8px_rgba(0,243,255,0.8)] transition-all hover:-translate-x-0.5">
-            <SkipBack size={26} fill="currentColor" />
+      <div className="flex flex-col gap-3 px-6 py-4 shrink-0 bg-gradient-to-t from-slate-950/80 to-transparent">
+        <div className="flex items-center justify-between">
+          <button 
+            onClick={toggleShuffle} 
+            className={`p-2 transition-all duration-300 rounded-full ${shuffle ? 'text-pink-500 bg-pink-500/10 shadow-[0_0_15px_rgba(248,0,255,0.4)] drop-shadow-[0_0_5px_#f800ff]' : 'text-slate-500 hover:text-cyan-400 hover:bg-cyan-500/10'}`}
+          >
+            <Shuffle size={18} />
           </button>
+
+          <div className="flex items-center gap-5">
+            <button onClick={prevTrack} className="text-slate-300 hover:text-cyan-400 drop-shadow-md hover:drop-shadow-[0_0_8px_rgba(0,243,255,0.8)] transition-all hover:-translate-x-0.5">
+              <SkipBack size={26} fill="currentColor" />
+            </button>
+
+            <button 
+              onClick={togglePlay} 
+              className="w-16 h-16 rounded-full bg-gradient-to-br from-slate-800 to-slate-900 border-2 border-cyan-500/40 flex items-center justify-center text-cyan-400 hover:border-cyan-400 hover:text-cyan-300 transition-all duration-300 hover:scale-105 shadow-[0_0_15px_rgba(0,243,255,0.2)] hover:shadow-[0_0_25px_rgba(0,243,255,0.6)] relative group"
+            >
+              <div className="absolute inset-0 rounded-full bg-cyan-400/20 blur-md opacity-0 group-hover:opacity-100 transition-opacity"></div>
+              {isPlaying ? <Pause size={28} fill="currentColor" className="z-10" /> : <Play size={28} fill="currentColor" className="ml-1 z-10" />}
+            </button>
+
+            <button onClick={nextTrack} className="text-slate-300 hover:text-cyan-400 drop-shadow-md hover:drop-shadow-[0_0_8px_rgba(0,243,255,0.8)] transition-all hover:translate-x-0.5">
+              <SkipForward size={26} fill="currentColor" />
+            </button>
+          </div>
 
           <button 
-            onClick={togglePlay} 
-            className="w-16 h-16 rounded-full bg-gradient-to-br from-slate-800 to-slate-900 border-2 border-cyan-500/40 flex items-center justify-center text-cyan-400 hover:border-cyan-400 hover:text-cyan-300 transition-all duration-300 hover:scale-105 shadow-[0_0_15px_rgba(0,243,255,0.2)] hover:shadow-[0_0_25px_rgba(0,243,255,0.6)] relative group"
+            onClick={cycleRepeat} 
+            className={`p-2 transition-all duration-300 rounded-full ${repeatMode !== 'none' ? 'text-cyan-400 bg-cyan-400/10 shadow-[0_0_15px_rgba(0,243,255,0.4)] drop-shadow-[0_0_5px_#00f3ff]' : 'text-slate-500 hover:text-pink-500 hover:bg-pink-500/10'}`}
           >
-            <div className="absolute inset-0 rounded-full bg-cyan-400/20 blur-md opacity-0 group-hover:opacity-100 transition-opacity"></div>
-            {isPlaying ? <Pause size={28} fill="currentColor" className="z-10" /> : <Play size={28} fill="currentColor" className="ml-1 z-10" />}
-          </button>
-
-          <button onClick={nextTrack} className="text-slate-300 hover:text-cyan-400 drop-shadow-md hover:drop-shadow-[0_0_8px_rgba(0,243,255,0.8)] transition-all hover:translate-x-0.5">
-            <SkipForward size={26} fill="currentColor" />
+            {repeatMode === 'one' ? <Repeat1 size={18} /> : <Repeat size={18} />}
           </button>
         </div>
 
-        <button 
-          onClick={cycleRepeat} 
-          className={`p-2 transition-all duration-300 rounded-full ${repeatMode !== 'none' ? 'text-cyan-400 bg-cyan-400/10 shadow-[0_0_15px_rgba(0,243,255,0.4)] drop-shadow-[0_0_5px_#00f3ff]' : 'text-slate-500 hover:text-pink-500 hover:bg-pink-500/10'}`}
-        >
-          {repeatMode === 'one' ? <Repeat1 size={18} /> : <Repeat size={18} />}
-        </button>
+        {/* Volume Slider */}
+        <div className="flex items-center justify-center gap-3 w-full max-w-[200px] mx-auto opacity-70 hover:opacity-100 transition-opacity">
+          <button onClick={() => setVolume(volume === 0 ? 1 : 0)} className="text-slate-400 hover:text-cyan-400 transition-colors">
+            {volume === 0 ? <VolumeX size={16} /> : <Volume2 size={16} />}
+          </button>
+          <div 
+            className="flex-1 h-1.5 bg-slate-900 rounded-full overflow-hidden cursor-pointer relative border border-white/5"
+            onClick={(e) => {
+              const rect = e.currentTarget.getBoundingClientRect();
+              const percent = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+              setVolume(percent);
+            }}
+          >
+            <div 
+              className="absolute top-0 left-0 h-full bg-cyan-500 transition-all"
+              style={{ width: \`\${volume * 100}%\` }}
+            ></div>
+          </div>
+        </div>
       </div>
 
       {/* Playlist */}

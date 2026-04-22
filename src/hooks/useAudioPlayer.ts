@@ -17,6 +17,7 @@ export function useAudioPlayer() {
   const [duration, setDuration] = useState(0);
   const [repeatMode, setRepeatMode] = useState<RepeatMode>('none');
   const [shuffle, setShuffle] = useState(false);
+  const [volume, setVolumeState] = useState(1);
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
@@ -31,6 +32,13 @@ export function useAudioPlayer() {
   useEffect(() => { currentIndexRef.current = currentIndex; }, [currentIndex]);
   useEffect(() => { repeatModeRef.current = repeatMode; }, [repeatMode]);
   useEffect(() => { shuffleRef.current = shuffle; }, [shuffle]);
+
+  const setVolume = useCallback((val: number) => {
+    setVolumeState(val);
+    if (audioRef.current) {
+      audioRef.current.volume = val;
+    }
+  }, []);
 
   // --- Funkce přímého ovládání audia (imperativní, ne přes useState) ---
 
@@ -379,6 +387,8 @@ export function useAudioPlayer() {
     cycleRepeat,
     toggleShuffle,
     seek,
+    volume,
+    setVolume,
     audioRef,
   };
 }
