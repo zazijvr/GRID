@@ -51,17 +51,18 @@ else
     curl -L --progress-bar -H "Accept: application/octet-stream" "${AUTH_ARGS[@]}" "$ASSET_ID" -o "$APP_PATH"
 fi
 
-echo "📦 Rozbaluji bezpečný nativní kontejner z AppImage (pro podporu GStreamer audio kodeků)..."
+echo "📦 Rozbaluji bezpečný nativní kontejner z AppImage..."
 chmod +x "$APP_PATH"
 cd "$APP_DIR"
 ./GRID.AppImage --appimage-extract > /dev/null
-mv squashfs-root/usr/bin/zvr-grid ./zvr-grid-bin
+mv squashfs-root/usr/bin/zvr-grid ./zvr-grid
 rm -rf squashfs-root GRID.AppImage
 
-FINAL_EXEC="$APP_DIR/zvr-grid-bin"
+FINAL_EXEC="$APP_DIR/zvr-grid"
+ICON_PATH="$APP_DIR/grid-icon.png"
 
-echo "🖼️ Stahuji ikonu..."
-curl -H "Authorization: token $GITHUB_TOKEN" -sL "https://raw.githubusercontent.com/zazijvr/GRID/main/public/GRID_icon_desktop.png" -o "$ICON_DIR/zvr-grid.png"
+echo "🖼️ Stahuji ikonu napřímo k aplikaci..."
+curl -H "Authorization: token $GITHUB_TOKEN" -sL "https://raw.githubusercontent.com/zazijvr/GRID/main/public/GRID_icon_desktop.png" -o "$ICON_PATH"
 
 echo "🔗 Vytvářím zástupce na ploše a v menu..."
 cat <<EOF > "$DESKTOP_DIR/zvr-grid.desktop"
@@ -69,7 +70,7 @@ cat <<EOF > "$DESKTOP_DIR/zvr-grid.desktop"
 Name=Zažij VR GRID
 Comment=Hudební přehrávač GRID
 Exec=env WEBKIT_DISABLE_DMABUF_RENDERER=1 $FINAL_EXEC
-Icon=$ICON_DIR/zvr-grid.png
+Icon=$ICON_PATH
 Terminal=false
 Type=Application
 Categories=AudioVideo;Audio;Player;
