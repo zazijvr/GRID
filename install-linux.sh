@@ -51,19 +51,24 @@ else
     curl -L --progress-bar -H "Accept: application/octet-stream" "${AUTH_ARGS[@]}" "$ASSET_ID" -o "$APP_PATH"
 fi
 
-echo "⚙️ Nastavuji spustitelnost..."
+echo "📦 Rozbaluji bezpečný nativní kontejner z AppImage (pro podporu GStreamer audio kodeků)..."
 chmod +x "$APP_PATH"
+cd "$INSTALL_DIR"
+./GRID.AppImage --appimage-extract > /dev/null
+mv squashfs-root/usr/bin/zvr-grid ./zvr-grid-bin
+rm -rf squashfs-root GRID.AppImage
 
-echo "🎨 Stahuji a nastavuji ikonu pro Linux..."
-# Stáhne naši čtvercovou desktop ikonu přímo ze source kódu
-curl -sL "${AUTH_ARGS[@]}" "https://raw.githubusercontent.com/zazijvr/GRID/main/public/GRID_icon_desktop.png" -o "$ICON_DIR/zvr-grid.png"
+FINAL_EXEC="$INSTALL_DIR/zvr-grid-bin"
 
-echo "📝 Vytvářím zástupce (Launcher) pro Start menu..."
+echo "🖼️ Stahuji ikonu..."
+curl -H "Authorization: token $GITHUB_TOKEN" -sL "https://raw.githubusercontent.com/zazijvr/GRID/main/public/GRID_icon_desktop.png" -o "$ICON_DIR/zvr-grid.png"
+
+echo "🔗 Vytvářím zástupce na ploše a v menu..."
 cat <<EOF > "$DESKTOP_DIR/zvr-grid.desktop"
 [Desktop Entry]
 Name=Zažij VR GRID
 Comment=Hudební přehrávač GRID
-Exec=env WEBKIT_DISABLE_DMABUF_RENDERER=1 $APP_PATH
+Exec=env WEBKIT_DISABLE_DMABUF_RENDERER=1 $FINAL_EXEC
 Icon=$ICON_DIR/zvr-grid.png
 Terminal=false
 Type=Application
