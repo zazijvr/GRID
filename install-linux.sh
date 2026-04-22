@@ -25,11 +25,11 @@ echo "🔍 Zjišťuji poslední verzi balíčku (AppImage)..."
 API_URL="https://api.github.com/repos/zazijvr/GRID/releases"
 
 # Získáme API URL přímo na asset (nikoliv browser_download, to pod private repo failuje na AWS)
-ASSET_ID=$(curl -s $(eval echo $AUTH_HEADER) "$API_URL" | grep -m 1 -oP '"url": "\Khttps://api.github.com/repos/zazijvr/GRID/releases/assets/[^"]*' | head -n 1)
+ASSET_ID=$(curl -s $(eval echo $AUTH_HEADER) "$API_URL" | grep -m 1 -oP '"url": "\Khttps://api.github.com/repos/zazijvr/GRID/releases/assets/[^"]*' | head -n 1 || true)
 
 if [ -z "$ASSET_ID" ]; then
     # Zkusíme to ještě najít přes normální download (kdyby bylo repo public)
-    ASSET_URL=$(curl -s $(eval echo $AUTH_HEADER) "$API_URL" | grep -m 1 -oP '"browser_download_url": "\K[^"]*\.AppImage')
+    ASSET_URL=$(curl -s $(eval echo $AUTH_HEADER) "$API_URL" | grep -m 1 -oP '"browser_download_url": "\K[^"]*\.AppImage' || true)
     if [ -z "$ASSET_URL" ]; then
         echo "❌ Selhalo stahování! Buď neexistuje žádný build, nebo je repo Private a tys neposkytl GITHUB_TOKEN."
         exit 1
