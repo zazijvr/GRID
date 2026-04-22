@@ -69,5 +69,5 @@ jobs:
           tagName: "v__VERSION__"
           releaseName: "GRID Desktop v__VERSION__"
           releaseBody: "Automatický build pro hudební aplikaci GRID."
-          releaseDraft: true
+          releaseDraft: false
           prerelease: false
