@@ -64,7 +64,7 @@ cat <<EOF > "$DESKTOP_DIR/zvr-grid.desktop"
 Name=Zažij VR GRID
 Comment=Hudební přehrávač GRID
 Exec=env WEBKIT_DISABLE_DMABUF_RENDERER=1 $APP_PATH
-Icon=$ICON_DIR/zvr-grid.png
+Icon=zvr-grid
 Terminal=false
 Type=Application
 Categories=AudioVideo;Audio;Player;
@@ -72,7 +72,12 @@ Keywords=music;player;vr;grid;
 StartupNotify=true
 EOF
 
+echo "🔄 Aktualizuji systémové ikony a tvořím cache..."
+touch "$HOME/.local/share/icons/hicolor" || true
+gtk-update-icon-cache -f -t "$HOME/.local/share/icons/hicolor" || true
 update-desktop-database "$DESKTOP_DIR" || true
+if command -v kbuildsycoca6 >/dev/null 2>&1; then kbuildsycoca6 2>/dev/null || true; fi
+if command -v kbuildsycoca5 >/dev/null 2>&1; then kbuildsycoca5 2>/dev/null || true; fi
 
 echo "=========================================================="
 echo "✅ HOTOVO! GRID máš nainstalovaný a připravený."
