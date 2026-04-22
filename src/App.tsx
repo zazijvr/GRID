@@ -227,7 +227,7 @@ function App() {
           >
             <div 
               className="absolute top-0 left-0 h-full bg-cyan-500 transition-all"
-              style={{ width: \`\${volume * 100}%\` }}
+              style={{ width: `${volume * 100}%` }}
             ></div>
           </div>
         </div>
