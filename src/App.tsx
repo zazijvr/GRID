@@ -5,6 +5,8 @@ import {
 import { useAudioPlayer } from './hooks/useAudioPlayer';
 import { SpectrumVisualizer } from './components/SpectrumVisualizer';
 
+const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+
 function App() {
   const {
     tracks,
@@ -89,29 +91,31 @@ function App() {
 
   return (
     <div 
-      className={`w-full h-full flex flex-col bg-slate-900/90 backdrop-blur-md border border-cyan-500/30 rounded-lg overflow-hidden transition-colors ${isDragging ? 'border-pink-500/80 shadow-[0_0_20px_rgba(248,0,255,0.4)]' : 'shadow-2xl'}`}
+      className={`w-full h-full flex flex-col bg-slate-900/90 backdrop-blur-md overflow-hidden transition-colors ${!isMobile ? 'border border-cyan-500/30 rounded-lg shadow-2xl' : ''} ${isDragging ? 'border-pink-500/80 shadow-[0_0_20px_rgba(248,0,255,0.4)]' : ''}`}
       onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
       onDragLeave={() => setIsDragging(false)}
       onDrop={handleDrop}
     >
-      {/* Title Bar - Draggable */}
-      <div 
-        data-tauri-drag-region
-        onPointerDown={startDragging}
-        className="h-10 shrink-0 bg-gradient-to-r from-slate-950 via-slate-900 to-slate-950 flex items-center justify-between px-3 border-b border-cyan-500/30 select-none cursor-move shadow-[0_2px_10px_rgba(0,243,255,0.1)]"
-      >
-        <div data-tauri-drag-region className="flex items-center gap-3 text-cyan-400 font-bold text-sm tracking-widest uppercase pointer-events-none drop-shadow-[0_0_5px_rgba(0,243,255,0.6)]">
-          <img src="/logo.png" alt="Zažij VR Logo" className="h-6 object-contain drop-shadow-[0_0_8px_rgba(248,0,255,0.6)]" draggable={false} />
+      {/* Title Bar - Draggable - Skryto na mobilech */}
+      {!isMobile && (
+        <div 
+          data-tauri-drag-region
+          onPointerDown={startDragging}
+          className="h-10 shrink-0 bg-gradient-to-r from-slate-950 via-slate-900 to-slate-950 flex items-center justify-between px-3 border-b border-cyan-500/30 select-none cursor-move shadow-[0_2px_10px_rgba(0,243,255,0.1)]"
+        >
+          <div data-tauri-drag-region className="flex items-center gap-3 text-cyan-400 font-bold text-sm tracking-widest uppercase pointer-events-none drop-shadow-[0_0_5px_rgba(0,243,255,0.6)]">
+            <img src="/logo.png" alt="Zažij VR Logo" className="h-6 object-contain drop-shadow-[0_0_8px_rgba(248,0,255,0.6)]" draggable={false} />
+          </div>
+          <div className="flex items-center gap-2">
+            <button onClick={minimizeWindow} className="text-slate-400 hover:text-cyan-400 transition-colors p-1">
+              <Minimize2 size={14} />
+            </button>
+            <button onClick={closeWindow} className="text-slate-400 hover:text-pink-500 transition-colors p-1">
+              <X size={14} />
+            </button>
+          </div>
         </div>
-        <div className="flex items-center gap-2">
-          <button onClick={minimizeWindow} className="text-slate-400 hover:text-cyan-400 transition-colors p-1">
-            <Minimize2 size={14} />
-          </button>
-          <button onClick={closeWindow} className="text-slate-400 hover:text-pink-500 transition-colors p-1">
-            <X size={14} />
-          </button>
-        </div>
-      </div>
+      )}
 
       {/* Main Info */}
       <div className="p-4 flex flex-col items-center justify-center shrink-0 border-b border-white/5 relative overflow-hidden group">

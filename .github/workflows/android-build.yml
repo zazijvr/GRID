@@ -1,0 +1,77 @@
+name: Build Android APK
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-android:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Setup Node (For Tauri CLI underlying tools)
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android, armv7-linux-androideabi, i686-linux-android, x86_64-linux-android
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: "./src-tauri -> target"
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl wget file libssl-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev patchelf
+          bun install
+
+      - name: Build APK (Release)
+        run: |
+          npx tauri android init || true
+          npx tauri android build --apk
+
+      - name: Sign Release APK
+        run: |
+          # Vygenerovani testovaciho klice uvnitr kontejneru pro podepsani aplikace GRID
+          keytool -genkey -v -keystore release.jks -keyalg RSA -keysize 2048 -validity 10000 -alias zazijvr -dname "CN=ZažijVR GRID" -storepass gridpass -keypass gridpass
+          
+          # Nalezeni nejnovejsi verze Android build-tools
+          BUILD_TOOLS=$(ls -d $ANDROID_HOME/build-tools/* | sort -V | tail -n 1)
+          
+          # Zipalign unsigned balicku
+          $BUILD_TOOLS/zipalign -v 4 src-tauri/gen/android/app/build/outputs/apk/universal/release/app-universal-release-unsigned.apk aligned.apk
+          
+          # Podepsani APK klicem, cimz vznika instlovatelne Release APK pro mobilni zarizeni
+          $BUILD_TOOLS/apksigner sign --ks release.jks --ks-key-alias zazijvr --ks-pass pass:gridpass --key-pass pass:gridpass --out zvr-grid-android-release.apk aligned.apk
+
+      - name: Publikace zkompilované verze do Release složky
+        uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/heads/')
+        with:
+          tag_name: latest-build
+          files: zvr-grid-android-release.apk
+          prerelease: false
