@@ -53,12 +53,12 @@ fi
 
 echo "📦 Rozbaluji bezpečný nativní kontejner z AppImage (pro podporu GStreamer audio kodeků)..."
 chmod +x "$APP_PATH"
-cd "$INSTALL_DIR"
+cd "$APP_DIR"
 ./GRID.AppImage --appimage-extract > /dev/null
 mv squashfs-root/usr/bin/zvr-grid ./zvr-grid-bin
 rm -rf squashfs-root GRID.AppImage
 
-FINAL_EXEC="$INSTALL_DIR/zvr-grid-bin"
+FINAL_EXEC="$APP_DIR/zvr-grid-bin"
 
 echo "🖼️ Stahuji ikonu..."
 curl -H "Authorization: token $GITHUB_TOKEN" -sL "https://raw.githubusercontent.com/zazijvr/GRID/main/public/GRID_icon_desktop.png" -o "$ICON_DIR/zvr-grid.png"
