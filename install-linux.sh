@@ -29,6 +29,7 @@ ASSET_ID=$(curl -s "${AUTH_ARGS[@]}" "$API_URL" | python3 -c '
 import sys, json
 try:
     for release in json.load(sys.stdin):
+        if release.get("draft"): continue
         for asset in release.get("assets", []):
             if asset.get("name", "").endswith(".AppImage"):
                 print(asset["url"])
