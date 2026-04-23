@@ -1,6 +1,6 @@
 import React, { useRef, useState } from 'react';
 import { 
-  Play, Pause, SkipForward, SkipBack, Shuffle, Repeat, Repeat1, FolderPlus, FolderOpen, Trash2, Volume2, VolumeX 
+  Play, Pause, SkipForward, SkipBack, Shuffle, Repeat, Repeat1, FolderPlus, FolderOpen, Trash2, Volume2, VolumeX, Minimize2, X 
 } from 'lucide-react';
 import { useAudioPlayer } from './hooks/useAudioPlayer';
 import { SpectrumVisualizer } from './components/SpectrumVisualizer';
