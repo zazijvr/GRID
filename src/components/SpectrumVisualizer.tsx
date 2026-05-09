@@ -20,17 +20,47 @@ export function SpectrumVisualizer({ audioRef, isPlaying }: SpectrumVisualizerPr
     // @ts-expect-error ukládáme kontext přímo na DOM element jako hack pro React StrictMode / HMR
     if (!audio.__audioCtx) {
       const Ctx = window.AudioContext || (window as any).webkitAudioContext;
-      const ctx = new Ctx();
+      const ctx = new Ctx({ latencyHint: 'playback' });
       const analyser = ctx.createAnalyser();
       
-      // 128 dává rozumný počet cca 64 proužků na grafu, 256 dává 128 proužků atd.
       analyser.fftSize = 128;
-      // Zjemnění pohybu, aby to na displeji nebylo jako stroboskop (1.0 = sekne, 0.0 = epileptický)
       analyser.smoothingTimeConstant = 0.85; 
       
-      const source = ctx.createMediaElementSource(audio);
+      // === LINUX WEBKITGTK FIX (PARALLEL AUDIO HACK) ===
+      // WebKitGTK má obrovský bug: pokud použijeme createMediaElementSource na hlavní audio tag,
+      // buď to úplně rozbije routování do Bluetooth, nebo to vytvoří 2 streamy (doubled audio) a hraje to hrozně.
+      // ŘEŠENÍ: Hlavní <audio> tag necháme úplně napokoji (bude hrát čistě a nativně).
+      // Vytvoříme si tajný "klon", který bude hrát paralelně, a ten odkloníme do vizualizéru!
+      const cloneAudio = new Audio();
+      cloneAudio.crossOrigin = "anonymous";
+      cloneAudio.muted = true;
+      cloneAudio.volume = 0;
+      
+      audio.addEventListener('play', () => {
+        if (cloneAudio.src !== audio.src) cloneAudio.src = audio.src;
+        cloneAudio.currentTime = audio.currentTime;
+        cloneAudio.play().catch(e => console.error("Clone play error", e));
+      });
+      audio.addEventListener('pause', () => cloneAudio.pause());
+      audio.addEventListener('seeking', () => { cloneAudio.currentTime = audio.currentTime; });
+      audio.addEventListener('timeupdate', () => {
+        // Občasná synchronizace, pokud by se klon rozešel o víc jak 0.2s
+        if (!cloneAudio.paused && Math.abs(cloneAudio.currentTime - audio.currentTime) > 0.2) {
+          cloneAudio.currentTime = audio.currentTime;
+        }
+      });
+
+      const source = ctx.createMediaElementSource(cloneAudio);
       source.connect(analyser);
-      analyser.connect(ctx.destination);
+      
+      // Nutné propojení do destination, jinak WebKitGTK neztlumí původní HTML výstup klonu
+      // a klon hraje nahlas (což způsobilo to "doubled" echo a "hraje to blbě").
+      // Ztlumíme to přes GainNode na nulu, takže AudioContext ven posílá absolutní ticho,
+      // ale analyzér svoje data dostane. Zvuk hraje čistě a jen jednou z originálního <audio>.
+      const silencer = ctx.createGain();
+      silencer.gain.value = 0;
+      analyser.connect(silencer);
+      silencer.connect(ctx.destination);
 
       // @ts-expect-error
       audio.__audioCtx = ctx;
@@ -56,6 +86,9 @@ export function SpectrumVisualizer({ audioRef, isPlaying }: SpectrumVisualizerPr
       renderLoop();
     } else {
       cancelAnimationFrame(reqRef.current);
+      // Odstraněn suspend() hack: WebKitGTK má známý bug, kdy volání suspend()
+      // a následné resume() na Linuxu "zmrazí" PulseAudio buffer a do Bluetooth repráků
+      // posílá jen ticho, i když je stream v pavucontrol vidět jako "active".
     }
     return () => cancelAnimationFrame(reqRef.current);
   }, [isPlaying]);

@@ -1,9 +1,10 @@
 import React, { useRef, useState } from 'react';
 import { 
-  Play, Pause, SkipForward, SkipBack, Shuffle, Repeat, Repeat1, FolderPlus, FolderOpen, Trash2, Volume2, VolumeX, Minimize2, X 
+  Play, Pause, SkipForward, SkipBack, Shuffle, Repeat, Repeat1, FolderPlus, FolderOpen, Trash2, Volume2, VolumeX, Minimize2, X, MonitorPlay 
 } from 'lucide-react';
 import { useAudioPlayer } from './hooks/useAudioPlayer';
 import { SpectrumVisualizer } from './components/SpectrumVisualizer';
+import { VisualizerStudio } from './components/VisualizerStudio';
 
 const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
 
@@ -29,12 +30,19 @@ function App() {
     seek,
     volume,
     setVolume,
+    isMuted,
+    toggleMute,
     audioRef
   } = useAudioPlayer();
 
   const fileInputRef = useRef<HTMLInputElement>(null);      // Přidat
   const fileInputOpenRef = useRef<HTMLInputElement>(null);  // Otevřít
   const [isDragging, setIsDragging] = useState(false);
+  const [showVisualizer, setShowVisualizer] = useState(false);
+
+  const [scrubbingTime, setScrubbingTime] = useState<number | null>(null);
+  const [hoverProgress, setHoverProgress] = useState<number | null>(null);
+  const [hoverVolume, setHoverVolume] = useState<number | null>(null);
 
   // Format seconds to mm:ss
   const formatTime = (time: number) => {
@@ -67,6 +75,11 @@ function App() {
   };
 
   const closeWindow = () => {
+    if (audioRef.current) {
+      audioRef.current.pause();
+      // @ts-expect-error
+      if (audioRef.current.__audioCtx) audioRef.current.__audioCtx.close();
+    }
     // @ts-expect-error window.__TAURI_INTERNALS__ is injected
     if (window.__TAURI_INTERNALS__) {
       import('@tauri-apps/api/window').then(m => m.getCurrentWindow().close());
@@ -107,6 +120,13 @@ function App() {
             <img src="/logo.png" alt="Zažij VR Logo" className="h-6 object-contain drop-shadow-[0_0_8px_rgba(248,0,255,0.6)]" draggable={false} />
           </div>
           <div className="flex items-center gap-2">
+            <button 
+              onClick={() => setShowVisualizer(true)} 
+              title="Visualizer Studio"
+              className="text-slate-400 hover:text-cyan-400 transition-colors p-1 mr-1"
+            >
+              <MonitorPlay size={14} />
+            </button>
             <button onClick={minimizeWindow} className="text-slate-400 hover:text-cyan-400 transition-colors p-1">
               <Minimize2 size={14} />
             </button>
@@ -153,24 +173,66 @@ function App() {
           )}
         </div>
 
-        {/* Progress Bar */}
+        {/* Progress Bar Container - Zvětšená hit area pomocí py-4 */}
         <div className="w-full mt-4 flex items-center gap-3 text-xs text-slate-400 font-mono z-10">
           <span className="font-medium drop-shadow-sm text-cyan-400/80">{formatTime(currentTime)}</span>
           <div 
-            className="flex-1 h-2 bg-slate-950/80 rounded-full overflow-hidden cursor-pointer relative group border border-white/5"
-            onClick={(e) => {
+            className="flex-1 py-4 cursor-none relative group flex items-center"
+            onPointerMove={(e) => {
+              const rect = e.currentTarget.getBoundingClientRect();
+              setHoverProgress(Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width)));
+            }}
+            onPointerLeave={() => setHoverProgress(null)}
+            onPointerDown={(e) => {
               if (duration === 0) return;
               const rect = e.currentTarget.getBoundingClientRect();
-              const percent = (e.clientX - rect.left) / rect.width;
-              seek(percent * duration);
+              
+              const handleMove = (moveEvent: PointerEvent) => {
+                const percent = Math.max(0, Math.min(1, (moveEvent.clientX - rect.left) / rect.width));
+                setScrubbingTime(percent * duration);
+              };
+              
+              const handleUp = (upEvent: PointerEvent) => {
+                window.removeEventListener('pointermove', handleMove);
+                window.removeEventListener('pointerup', handleUp);
+                const percent = Math.max(0, Math.min(1, (upEvent.clientX - rect.left) / rect.width));
+                seek(percent * duration);
+                setScrubbingTime(null);
+              };
+              
+              window.addEventListener('pointermove', handleMove);
+              window.addEventListener('pointerup', handleUp);
+              
+              // Handle initial click
+              const percent = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+              setScrubbingTime(percent * duration);
             }}
           >
-            <div 
-              className="absolute top-0 left-0 h-full bg-gradient-to-r from-cyan-400 via-pink-400 to-pink-500 transition-all duration-100 ease-linear shadow-[0_0_12px_rgba(248,0,255,0.8)]"
-              style={{ width: `${duration > 0 ? (currentTime / duration) * 100 : 0}%` }}
-            >
-              <div className="absolute right-0 top-0 bottom-0 w-2 bg-white/50 blur-[2px]"></div>
+            {/* Visual Track */}
+            <div className="w-full h-2 bg-slate-950/80 rounded-full relative border border-white/5 pointer-events-none">
+              <div 
+                className="absolute top-0 left-0 h-full rounded-full bg-gradient-to-r from-cyan-400 via-pink-400 to-pink-500 transition-all duration-100 ease-linear shadow-[0_0_12px_rgba(248,0,255,0.8)] pointer-events-none"
+                style={{ width: `${duration > 0 ? ((scrubbingTime !== null ? scrubbingTime : currentTime) / duration) * 100 : 0}%` }}
+              >
+                <div className="absolute right-0 top-0 bottom-0 w-2 bg-white/50 blur-[2px]"></div>
+              </div>
             </div>
+
+            {/* JEDNOTNÁ KULIČKA (Persistent & Scrubbing) */}
+            <div 
+              className={`absolute top-1/2 -translate-y-1/2 w-4 h-4 rounded-full pointer-events-none z-20 flex items-center justify-center backdrop-blur-sm transition-all duration-150 ${scrubbingTime !== null ? 'bg-white/90 border-2 border-pink-500 shadow-[0_0_15px_rgba(248,0,255,0.8)] scale-[1.3]' : 'bg-pink-500/90 border border-white/50 shadow-[0_0_8px_rgba(248,0,255,0.5)] group-hover:scale-110 group-hover:bg-pink-400'}`}
+              style={{ left: `calc(${duration > 0 ? ((scrubbingTime !== null ? scrubbingTime : currentTime) / duration) * 100 : 0}% - 8px)` }}
+            >
+              <div className={`w-1.5 h-1.5 rounded-full ${scrubbingTime !== null ? 'bg-pink-500' : 'bg-white'}`}></div>
+            </div>
+
+            {/* Tečka ukazující náhled místa pod myší (GHOST dot) */}
+            {hoverProgress !== null && scrubbingTime === null && (
+              <div 
+                className="absolute top-1/2 -translate-y-1/2 w-4 h-4 bg-white/20 border-2 border-white/40 rounded-full pointer-events-none z-10"
+                style={{ left: `calc(${hoverProgress * 100}% - 8px)` }}
+              ></div>
+            )}
           </div>
           <span className="font-medium drop-shadow-sm text-pink-500/80">{formatTime(duration)}</span>
         </div>
@@ -204,31 +266,88 @@ function App() {
             </button>
           </div>
 
-          <button 
-            onClick={cycleRepeat} 
-            className={`p-2 transition-all duration-300 rounded-full ${repeatMode !== 'none' ? 'text-cyan-400 bg-cyan-400/10 shadow-[0_0_15px_rgba(0,243,255,0.4)] drop-shadow-[0_0_5px_#00f3ff]' : 'text-slate-500 hover:text-pink-500 hover:bg-pink-500/10'}`}
-          >
-            {repeatMode === 'one' ? <Repeat1 size={18} /> : <Repeat size={18} />}
-          </button>
+          <div className="flex items-center gap-2">
+            {isMobile && (
+              <button 
+                onClick={() => setShowVisualizer(true)} 
+                title="Visualizer Studio"
+                className="p-2 transition-all duration-300 rounded-full text-slate-500 hover:text-cyan-400 hover:bg-cyan-400/10 hover:shadow-[0_0_15px_rgba(0,243,255,0.4)]"
+              >
+                <MonitorPlay size={18} />
+              </button>
+            )}
+            <button 
+              onClick={cycleRepeat} 
+              className={`p-2 transition-all duration-300 rounded-full ${repeatMode !== 'none' ? 'text-cyan-400 bg-cyan-400/10 shadow-[0_0_15px_rgba(0,243,255,0.4)] drop-shadow-[0_0_5px_#00f3ff]' : 'text-slate-500 hover:text-pink-500 hover:bg-pink-500/10'}`}
+            >
+              {repeatMode === 'one' ? <Repeat1 size={18} /> : <Repeat size={18} />}
+            </button>
+          </div>
         </div>
 
         {/* Volume Slider */}
-        <div className="flex items-center justify-center gap-3 w-full max-w-[200px] mx-auto opacity-70 hover:opacity-100 transition-opacity">
-          <button onClick={() => setVolume(volume === 0 ? 1 : 0)} className="text-slate-400 hover:text-cyan-400 transition-colors">
-            {volume === 0 ? <VolumeX size={16} /> : <Volume2 size={16} />}
+        <div 
+          className="flex items-center justify-center gap-3 w-full max-w-[240px] mx-auto opacity-70 hover:opacity-100 transition-opacity py-4 -my-4"
+          onWheel={(e) => {
+            const step = 0.05; // 5% vol up/down na jedno "cvaknutí" kolečkem
+            setVolume(Math.max(0, Math.min(1, volume + (e.deltaY < 0 ? step : -step))));
+          }}
+        >
+          <button onClick={toggleMute} className="text-slate-400 hover:text-cyan-400 transition-colors">
+            {isMuted || volume === 0 ? <VolumeX size={16} /> : <Volume2 size={16} />}
           </button>
+          {/* Volume Slider Hit Area zvětšená pomocí py-3 a w-full */}
           <div 
-            className="flex-1 h-1.5 bg-slate-900 rounded-full overflow-hidden cursor-pointer relative border border-white/5"
-            onClick={(e) => {
+            className="flex-1 py-3 cursor-none relative group flex items-center"
+            onPointerMove={(e) => {
               const rect = e.currentTarget.getBoundingClientRect();
+              setHoverVolume(Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width)));
+            }}
+            onPointerLeave={() => setHoverVolume(null)}
+            onPointerDown={(e) => {
+              const rect = e.currentTarget.getBoundingClientRect();
+              
+              const handleMove = (moveEvent: PointerEvent) => {
+                const percent = Math.max(0, Math.min(1, (moveEvent.clientX - rect.left) / rect.width));
+                setVolume(percent);
+              };
+              
+              const handleUp = () => {
+                window.removeEventListener('pointermove', handleMove);
+                window.removeEventListener('pointerup', handleUp);
+              };
+              
+              window.addEventListener('pointermove', handleMove);
+              window.addEventListener('pointerup', handleUp);
+              
+              // Handle initial click
               const percent = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
               setVolume(percent);
             }}
           >
+            {/* Visual Track */}
+            <div className="w-full h-1.5 bg-slate-900 rounded-full border border-white/5 pointer-events-none relative">
+              <div 
+                className="absolute top-0 left-0 h-full rounded-full bg-cyan-500 transition-all pointer-events-none"
+                style={{ width: `${volume * 100}%` }}
+              ></div>
+            </div>
+
+            {/* JEDNOTNÁ KULIČKA VOLUME */}
             <div 
-              className="absolute top-0 left-0 h-full bg-cyan-500 transition-all"
-              style={{ width: `${volume * 100}%` }}
-            ></div>
+              className={`absolute top-1/2 -translate-y-1/2 w-4 h-4 rounded-full pointer-events-none z-20 flex items-center justify-center backdrop-blur-sm transition-all duration-150 ${volume > 0 ? 'bg-cyan-400 border border-white/50 shadow-[0_0_8px_rgba(0,243,255,0.5)] group-hover:bg-cyan-300 group-hover:scale-110 group-active:bg-white/90 group-active:border-2 group-active:border-cyan-400 group-active:shadow-[0_0_15px_rgba(0,243,255,0.8)] group-active:scale-[1.3]' : 'bg-slate-700 border border-slate-500'}`}
+              style={{ left: `calc(${volume * 100}% - 8px)` }}
+            >
+              <div className="w-1.5 h-1.5 rounded-full bg-white group-active:bg-cyan-500"></div>
+            </div>
+
+            {/* GHOST dot */}
+            {hoverVolume !== null && (
+              <div 
+                className="absolute top-1/2 -translate-y-1/2 w-4 h-4 bg-white/20 border-2 border-cyan-400/40 rounded-full pointer-events-none z-10"
+                style={{ left: `calc(${hoverVolume * 100}% - 8px)` }}
+              ></div>
+            )}
           </div>
         </div>
       </div>
@@ -278,8 +397,8 @@ function App() {
       {/* Footer */}
       <div className="shrink-0 p-3 bg-slate-950 border-t border-white/5 flex gap-2">
         {/* Skryté file inputy */}
-        <input type="file" multiple accept="audio/*" className="hidden" ref={fileInputRef} onChange={handleFileChange} />
-        <input type="file" multiple accept="audio/*" className="hidden" ref={fileInputOpenRef} onChange={handleFileOpen} />
+        <input type="file" multiple accept="audio/*,audio/aac,audio/mp4,audio/mpeg,audio/mpegurl,audio/ogg,audio/vnd.rn-realaudio,audio/vorbis,audio/x-flac,audio/x-mp3,audio/x-mpegurl,audio/x-ms-wma,audio/x-musepack,audio/x-oggflac,audio/x-pn-realaudio,audio/x-scpls,audio/x-speex,audio/x-vorbis,audio/x-vorbis+ogg,audio/x-wav,.wav,.mp3,.flac,.ogg,.m4a,.aac,.wma" className="hidden" ref={fileInputRef} onChange={handleFileChange} />
+        <input type="file" multiple accept="audio/*,audio/aac,audio/mp4,audio/mpeg,audio/mpegurl,audio/ogg,audio/vnd.rn-realaudio,audio/vorbis,audio/x-flac,audio/x-mp3,audio/x-mpegurl,audio/x-ms-wma,audio/x-musepack,audio/x-oggflac,audio/x-pn-realaudio,audio/x-scpls,audio/x-speex,audio/x-vorbis,audio/x-vorbis+ogg,audio/x-wav,.wav,.mp3,.flac,.ogg,.m4a,.aac,.wma" className="hidden" ref={fileInputOpenRef} onChange={handleFileOpen} />
 
         {/* Přidat – přidá do existujícího playlistu */}
         <button
@@ -300,6 +419,14 @@ function App() {
         </button>
       </div>
 
+      {/* Visualizer Studio Overlay */}
+      {showVisualizer && (
+        <VisualizerStudio 
+          audioRef={audioRef} 
+          isPlaying={isPlaying} 
+          onClose={() => setShowVisualizer(false)} 
+        />
+      )}
     </div>
   );
 }

@@ -9,6 +9,58 @@ export type Track = {
 
 export type RepeatMode = 'none' | 'all' | 'one';
 
+const DB_NAME = 'zvr-grid-db';
+const STORE_NAME = 'playlist';
+
+function openDB(): Promise<IDBDatabase> {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(DB_NAME, 1);
+    request.onupgradeneeded = () => {
+      if (!request.result.objectStoreNames.contains(STORE_NAME)) {
+        request.result.createObjectStore(STORE_NAME);
+      }
+    };
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+}
+
+function savePlaylist(tracks: Track[]) {
+  openDB().then(db => {
+    const tx = db.transaction(STORE_NAME, 'readwrite');
+    const store = tx.objectStore(STORE_NAME);
+    const dataToSave = tracks.map(t => ({ id: t.id, name: t.name, url: t.url }));
+    store.put(dataToSave, 'tracks');
+  }).catch(e => console.warn("Failed to save playlist", e));
+}
+
+function loadPlaylist(): Promise<Track[]> {
+  return openDB().then(db => {
+    return new Promise<Track[]>((resolve) => {
+      const tx = db.transaction(STORE_NAME, 'readonly');
+      const store = tx.objectStore(STORE_NAME);
+      const request = store.get('tracks');
+      request.onsuccess = () => {
+        if (request.result) {
+          const recovered = request.result.map((t: any) => ({
+            id: t.id,
+            name: t.name,
+            url: t.url,
+            file: new File([], t.name, { type: 'audio/mpeg' }) 
+          }));
+          resolve(recovered);
+        } else {
+          resolve([]);
+        }
+      };
+      request.onerror = () => resolve([]);
+    });
+  }).catch(e => {
+    console.warn("Failed to load playlist", e);
+    return [];
+  });
+}
+
 export function useAudioPlayer() {
   const [tracks, setTracks] = useState<Track[]>([]);
   const [currentIndex, setCurrentIndex] = useState<number>(-1);
@@ -18,6 +70,8 @@ export function useAudioPlayer() {
   const [repeatMode, setRepeatMode] = useState<RepeatMode>('none');
   const [shuffle, setShuffle] = useState(false);
   const [volume, setVolumeState] = useState(1);
+  const [isMuted, setIsMuted] = useState(false);
+  const previousVolumeRef = useRef<number>(1);
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
@@ -28,17 +82,55 @@ export function useAudioPlayer() {
   const repeatModeRef = useRef<RepeatMode>('none');
   const shuffleRef = useRef<boolean>(false);
 
-  useEffect(() => { tracksRef.current = tracks; }, [tracks]);
+  const [isLoaded, setIsLoaded] = useState(false);
+
+  useEffect(() => {
+    loadPlaylist().then(savedTracks => {
+      if (savedTracks && savedTracks.length > 0) {
+        setTracks(savedTracks);
+        tracksRef.current = savedTracks;
+      }
+      setIsLoaded(true);
+    });
+  }, []);
+
+  useEffect(() => { 
+    tracksRef.current = tracks; 
+    if (isLoaded) {
+      savePlaylist(tracks);
+    }
+  }, [tracks, isLoaded]);
   useEffect(() => { currentIndexRef.current = currentIndex; }, [currentIndex]);
   useEffect(() => { repeatModeRef.current = repeatMode; }, [repeatMode]);
   useEffect(() => { shuffleRef.current = shuffle; }, [shuffle]);
 
   const setVolume = useCallback((val: number) => {
     setVolumeState(val);
+    if (val > 0) {
+      previousVolumeRef.current = val;
+      setIsMuted(false);
+    } else {
+      setIsMuted(true);
+    }
     if (audioRef.current) {
       audioRef.current.volume = val;
+      // @ts-expect-error
+      if (audioRef.current.__gainNode) {
+        // @ts-expect-error
+        audioRef.current.__gainNode.gain.value = val;
+      }
     }
   }, []);
+
+  const toggleMute = useCallback(() => {
+    if (isMuted || volume === 0) {
+      const prevVol = previousVolumeRef.current > 0 ? previousVolumeRef.current : 1;
+      setVolume(prevVol);
+    } else {
+      previousVolumeRef.current = volume;
+      setVolume(0);
+    }
+  }, [isMuted, volume, setVolume]);
 
   // --- Funkce přímého ovládání audia (imperativní, ne přes useState) ---
 
@@ -156,7 +248,10 @@ export function useAudioPlayer() {
   // --- Veřejné API (pro UI) ---
 
   const addFiles = async (files: File[]) => {
-    const audioFiles = files.filter(f => f.type.startsWith('audio/'));
+    const audioFiles = files.filter(f => 
+      f.type.startsWith('audio/') || 
+      f.name.toLowerCase().match(/\.(wav|mp3|flac|ogg|m4a|aac|wma|pls|m3u|m3u8|speex)$/)
+    );
 
     const newTracksPromises = audioFiles.map(async (f) => {
       // Čteme soubor jako base64 Data URI – GStreamer má
@@ -194,7 +289,10 @@ export function useAudioPlayer() {
     console.log('[openFiles] Zpracovávám novou složku:', files.length, 'souborů');
     
     // Filtrujeme audio soubory
-    const audioFiles = files.filter(f => f.type.startsWith('audio/'));
+    const audioFiles = files.filter(f => 
+      f.type.startsWith('audio/') || 
+      f.name.toLowerCase().match(/\.(wav|mp3|flac|ogg|m4a|aac|wma|pls|m3u|m3u8|speex)$/)
+    );
     if (audioFiles.length === 0) {
       console.warn('[openFiles] Nebyly nalezeny žádné validní audio soubory.');
       return;
@@ -246,6 +344,15 @@ export function useAudioPlayer() {
   const togglePlay = () => {
     const audio = audioRef.current;
     if (!audio || tracksRef.current.length === 0) return;
+
+    if (currentIndexRef.current === -1) {
+      if (shuffleRef.current) {
+        playAtIndex(Math.floor(Math.random() * tracksRef.current.length));
+      } else {
+        playAtIndex(0);
+      }
+      return;
+    }
 
     if (audio.paused) {
       audio.play().catch(e => console.error('Playback error:', e));
@@ -389,6 +496,8 @@ export function useAudioPlayer() {
     seek,
     volume,
     setVolume,
+    isMuted,
+    toggleMute,
     audioRef,
   };
 }
