@@ -114,10 +114,12 @@ export function useAudioPlayer() {
     }
     if (audioRef.current) {
       audioRef.current.volume = val;
+      // Při createMediaElementSource na WebKitGTK (Tauri/Linux) je hlasitost
+      // potřeba řídit přes GainNode v grafu, ne jen přes element.volume
       // @ts-expect-error
-      if (audioRef.current.__gainNode) {
+      if (audioRef.current.__silencer) {
         // @ts-expect-error
-        audioRef.current.__gainNode.gain.value = val;
+        audioRef.current.__silencer.gain.value = val;
       }
     }
   }, []);
@@ -142,22 +144,55 @@ export function useAudioPlayer() {
     const track = tracks[index];
     currentIndexRef.current = index;
 
-    // Okamžitě resetuj UI pozici – zabrání vizuálnímu skoku na starou pozici
     setCurrentTime(0);
     setDuration(0);
 
-    // Odstranit staré listenery 'canplay' aby nedošlo k vícenásobnému spuštění
-    const onCanPlay = () => {
-      audio.removeEventListener('canplay', onCanPlay);
-      if (shouldPlay) {
-        audio.play().catch(e => console.error('Playback error:', e));
-      }
+    // @ts-expect-error
+    const silencer: GainNode | undefined = audio.__silencer;
+    // @ts-expect-error
+    const ctx: AudioContext | undefined = audio.__audioCtx;
+
+    // Cílový gain = aktuální silencer gain (= uživatelem nastavená hlasitost)
+    const targetGain = silencer ? silencer.gain.value : audio.volume;
+
+    const doLoad = () => {
+      const onCanPlay = () => {
+        audio.removeEventListener('canplay', onCanPlay);
+        if (shouldPlay) {
+          // Obnov gain těsně před play – start ze silence není slyšitelný
+          if (silencer && ctx) {
+            silencer.gain.cancelScheduledValues(ctx.currentTime);
+            silencer.gain.setValueAtTime(targetGain, ctx.currentTime);
+          }
+          audio.play().catch(e => console.error('Playback error:', e));
+        }
+      };
+      audio.addEventListener('canplay', onCanPlay);
+      audio.src = track.url;
+      audio.load();
     };
 
-    audio.addEventListener('canplay', onCanPlay);
-    audio.src = track.url;
-    audio.load();
+    if (silencer && ctx && !audio.paused) {
+      // 1. Gain plynule na 0 (exponenciální – spolehlivější než linearRamp)
+      silencer.gain.cancelScheduledValues(ctx.currentTime);
+      silencer.gain.setValueAtTime(Math.max(silencer.gain.value, 0.001), ctx.currentTime);
+      silencer.gain.setTargetAtTime(0.0001, ctx.currentTime, 0.008); // ~40ms do ticha
+
+      setTimeout(() => {
+        // 2. Hard-fix na 0 a PAUZA – WebKit vyprázdní audio buffer čistě v tichosti
+        silencer.gain.cancelScheduledValues(ctx.currentTime);
+        silencer.gain.setValueAtTime(0, ctx.currentTime);
+        audio.pause(); // ← klíčové: pause až po ztlumení, ne dřív
+        // 3. Načti novou skladbu
+        doLoad();
+      }, 55);
+    } else {
+      doLoad();
+    }
   }, []);
+
+
+
 
   const playAtIndex = useCallback((index: number) => {
     setCurrentIndex(index);

@@ -1,12 +1,17 @@
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useCallback } from 'react';
 import { 
   Play, Pause, SkipForward, SkipBack, Shuffle, Repeat, Repeat1, FolderPlus, FolderOpen, Trash2, Volume2, VolumeX, Minimize2, X, MonitorPlay 
 } from 'lucide-react';
 import { useAudioPlayer } from './hooks/useAudioPlayer';
 import { SpectrumVisualizer } from './components/SpectrumVisualizer';
 import { VisualizerStudio } from './components/VisualizerStudio';
+import { Equalizer, EQButton } from './components/Equalizer';
+import type { EQPreset } from './components/Equalizer';
 
 const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+
+const PLAYER_WIDTH  = 350; // px – šířka přehrávače
+const EQ_PANEL_WIDTH = 280; // px – šířka EQ panelu
 
 function App() {
   const {
@@ -35,16 +40,44 @@ function App() {
     audioRef
   } = useAudioPlayer();
 
-  const fileInputRef = useRef<HTMLInputElement>(null);      // Přidat
-  const fileInputOpenRef = useRef<HTMLInputElement>(null);  // Otevřít
-  const [isDragging, setIsDragging] = useState(false);
+  const fileInputRef     = useRef<HTMLInputElement>(null);
+  const fileInputOpenRef = useRef<HTMLInputElement>(null);
+  const [isDragging,    setIsDragging]    = useState(false);
   const [showVisualizer, setShowVisualizer] = useState(false);
+  const [showEQ,         setShowEQ]        = useState(false);
+  const [activePreset,   setActivePreset]  = useState<EQPreset>('flat');
 
   const [scrubbingTime, setScrubbingTime] = useState<number | null>(null);
   const [hoverProgress, setHoverProgress] = useState<number | null>(null);
-  const [hoverVolume, setHoverVolume] = useState<number | null>(null);
+  const [hoverVolume,   setHoverVolume]   = useState<number | null>(null);
 
-  // Format seconds to mm:ss
+  // EQ panel toggle – otevření: nejdřív rozšíř okno, pak zobraz panel
+  //                  zavření:  nejdřív skryj panel, pak po animaci zmenši okno
+  const resizeWindow = useCallback((width: number) => {
+    // @ts-expect-error window.__TAURI_INTERNALS__ is injected
+    if (!window.__TAURI_INTERNALS__) return Promise.resolve();
+    return Promise.all([
+      import('@tauri-apps/api/window'),
+      import('@tauri-apps/api/dpi'),
+    ]).then(([{ getCurrentWindow }, { LogicalSize }]) => {
+      return getCurrentWindow().setSize(new LogicalSize(width, 600));
+    });
+  }, []);
+
+  const toggleEQ = useCallback(() => {
+    const next = !showEQ;
+    if (next) {
+      // Otevřít: nejdřív rozšiř okno → pak zobraz panel
+      resizeWindow(PLAYER_WIDTH + EQ_PANEL_WIDTH)
+        .then(() => setShowEQ(true))
+        .catch(() => setShowEQ(true)); // fallback i bez Tauri (browser preview)
+    } else {
+      // Zavřít: skryj panel a zmenši okno
+      setShowEQ(false);
+      resizeWindow(PLAYER_WIDTH);
+    }
+  }, [showEQ, resizeWindow]);
+
   const formatTime = (time: number) => {
     if (isNaN(time) || !isFinite(time)) return '0:00';
     const m = Math.floor(time / 60);
@@ -53,25 +86,19 @@ function App() {
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files.length > 0) {
-      addFiles(Array.from(e.target.files));
-    }
+    if (e.target.files && e.target.files.length > 0) addFiles(Array.from(e.target.files));
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
   const handleFileOpen = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files.length > 0) {
-      openFiles(Array.from(e.target.files));
-    }
+    if (e.target.files && e.target.files.length > 0) openFiles(Array.from(e.target.files));
     if (fileInputOpenRef.current) fileInputOpenRef.current.value = '';
   };
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     setIsDragging(false);
-    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-      addFiles(Array.from(e.dataTransfer.files));
-    }
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) addFiles(Array.from(e.dataTransfer.files));
   };
 
   const closeWindow = () => {
@@ -103,328 +130,326 @@ function App() {
   };
 
   return (
-    <div 
-      className={`w-full h-full flex flex-col bg-slate-900/90 backdrop-blur-md overflow-hidden transition-colors ${!isMobile ? 'border border-cyan-500/30 rounded-lg shadow-2xl' : ''} ${isDragging ? 'border-pink-500/80 shadow-[0_0_20px_rgba(248,0,255,0.4)]' : ''}`}
+    // Outer wrapper – flex-row pro player + EQ panel
+    <div
+      className={`w-full h-full flex flex-row overflow-hidden transition-colors
+        ${!isMobile ? 'border border-cyan-500/30 rounded-lg shadow-2xl' : ''}
+        ${isDragging ? 'border-pink-500/80 shadow-[0_0_20px_rgba(248,0,255,0.4)]' : ''}
+      `}
       onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
       onDragLeave={() => setIsDragging(false)}
       onDrop={handleDrop}
     >
-      {/* Title Bar - Draggable - Skryto na mobilech */}
-      {!isMobile && (
-        <div 
-          data-tauri-drag-region
-          onPointerDown={startDragging}
-          className="h-10 shrink-0 bg-gradient-to-r from-slate-950 via-slate-900 to-slate-950 flex items-center justify-between px-3 border-b border-cyan-500/30 select-none cursor-move shadow-[0_2px_10px_rgba(0,243,255,0.1)]"
-        >
-          <div data-tauri-drag-region className="flex items-center gap-3 text-cyan-400 font-bold text-sm tracking-widest uppercase pointer-events-none drop-shadow-[0_0_5px_rgba(0,243,255,0.6)]">
-            <img src="/logo.png" alt="Zažij VR Logo" className="h-6 object-contain drop-shadow-[0_0_8px_rgba(248,0,255,0.6)]" draggable={false} />
-          </div>
-          <div className="flex items-center gap-2">
-            <button 
-              onClick={() => setShowVisualizer(true)} 
-              title="Visualizer Studio"
-              className="text-slate-400 hover:text-cyan-400 transition-colors p-1 mr-1"
-            >
-              <MonitorPlay size={14} />
-            </button>
-            <button onClick={minimizeWindow} className="text-slate-400 hover:text-cyan-400 transition-colors p-1">
-              <Minimize2 size={14} />
-            </button>
-            <button onClick={closeWindow} className="text-slate-400 hover:text-pink-500 transition-colors p-1">
-              <X size={14} />
-            </button>
-          </div>
-        </div>
-      )}
+      {/* ── LEFT COLUMN – PLAYER – fixní šířka aby EQ panel nevytlačil obsah ── */}
+      <div className="flex flex-col bg-slate-900/90 backdrop-blur-md overflow-hidden shrink-0" style={{ width: PLAYER_WIDTH }}>
 
-      {/* Main Info */}
-      <div className="p-4 flex flex-col items-center justify-center shrink-0 border-b border-white/5 relative overflow-hidden group">
-        {/* Nativní Canvas Visualizer */}
-        {currentTrack && <SpectrumVisualizer audioRef={audioRef} isPlaying={isPlaying} />}
+        {/* Title Bar */}
+        {!isMobile && (
+          <div
+            data-tauri-drag-region
+            onPointerDown={startDragging}
+            className="h-10 shrink-0 bg-gradient-to-r from-slate-950 via-slate-900 to-slate-950 flex items-center justify-between px-3 border-b border-cyan-500/30 select-none cursor-move shadow-[0_2px_10px_rgba(0,243,255,0.1)]"
+          >
+            <div data-tauri-drag-region className="flex items-center gap-3 text-cyan-400 font-bold text-sm tracking-widest uppercase pointer-events-none drop-shadow-[0_0_5px_rgba(0,243,255,0.6)]">
+              <img src="/logo.png" alt="Zažij VR Logo" className="h-6 object-contain drop-shadow-[0_0_8px_rgba(248,0,255,0.6)]" draggable={false} />
+            </div>
+            <div className="flex items-center gap-1.5">
+              {/* EQ toggle button */}
+              <EQButton active={showEQ} onClick={toggleEQ} preset={activePreset} />
 
-        {/* Decorative background glow */}
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-32 h-32 bg-cyan-500/10 blur-2xl rounded-full pointer-events-none"></div>
-        {isPlaying && (
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-24 h-24 bg-pink-500/10 blur-2xl rounded-full pointer-events-none animate-pulse"></div>
+              <button
+                onClick={() => setShowVisualizer(true)}
+                title="Visualizer Studio"
+                className="text-slate-400 hover:text-cyan-400 transition-colors p-1"
+              >
+                <MonitorPlay size={14} />
+              </button>
+              <button onClick={minimizeWindow} className="text-slate-400 hover:text-cyan-400 transition-colors p-1">
+                <Minimize2 size={14} />
+              </button>
+              <button onClick={closeWindow} className="text-slate-400 hover:text-pink-500 transition-colors p-1">
+                <X size={14} />
+              </button>
+            </div>
+          </div>
         )}
 
-        <div className="h-16 w-full flex flex-col items-center justify-center text-center z-10 px-2 mt-2">
-          {currentTrack ? (
-            <>
-              <h2 className="text-white font-semibold truncate w-full text-base tracking-wide drop-shadow-[0_0_8px_rgba(0,243,255,0.4)]">
-                {currentTrack.name}
-              </h2>
-              <div className="text-cyan-400/70 text-xs mt-1 uppercase tracking-widest flex items-center gap-2">
-                {isPlaying ? (
-                  <span className="flex items-center gap-1.5">
-                    <span className="flex items-end gap-px h-3 overflow-hidden pb-px">
-                       <span className="eq-bar drop-shadow-[0_0_4px_rgba(0,243,255,0.8)]" style={{ animationDelay: '0.0s', animationDuration: '0.4s' }}></span>
-                       <span className="eq-bar drop-shadow-[0_0_4px_rgba(248,0,255,0.8)] !bg-pink-500" style={{ animationDelay: '0.2s', animationDuration: '0.3s' }}></span>
-                       <span className="eq-bar drop-shadow-[0_0_4px_rgba(0,243,255,0.8)]" style={{ animationDelay: '0.4s', animationDuration: '0.6s' }}></span>
-                       <span className="eq-bar drop-shadow-[0_0_4px_rgba(248,0,255,0.8)] !bg-pink-500" style={{ animationDelay: '0.1s', animationDuration: '0.5s' }}></span>
+        {/* Main Info + Visualizer */}
+        <div className="p-4 flex flex-col items-center justify-center shrink-0 border-b border-white/5 relative overflow-hidden group">
+          {currentTrack && <SpectrumVisualizer audioRef={audioRef} isPlaying={isPlaying} />}
+
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-32 h-32 bg-cyan-500/10 blur-2xl rounded-full pointer-events-none" />
+          {isPlaying && (
+            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-24 h-24 bg-pink-500/10 blur-2xl rounded-full pointer-events-none animate-pulse" />
+          )}
+
+          <div className="h-16 w-full flex flex-col items-center justify-center text-center z-10 px-2 mt-2">
+            {currentTrack ? (
+              <>
+                <h2 className="text-white font-semibold truncate w-full text-base tracking-wide drop-shadow-[0_0_8px_rgba(0,243,255,0.4)]">
+                  {currentTrack.name}
+                </h2>
+                <div className="text-cyan-400/70 text-xs mt-1 uppercase tracking-widest flex items-center gap-2">
+                  {isPlaying ? (
+                    <span className="flex items-center gap-1.5">
+                      <span className="flex items-end gap-px h-3 overflow-hidden pb-px">
+                        <span className="eq-bar drop-shadow-[0_0_4px_rgba(0,243,255,0.8)]" style={{ animationDelay: '0.0s', animationDuration: '0.4s' }} />
+                        <span className="eq-bar drop-shadow-[0_0_4px_rgba(248,0,255,0.8)] !bg-pink-500" style={{ animationDelay: '0.2s', animationDuration: '0.3s' }} />
+                        <span className="eq-bar drop-shadow-[0_0_4px_rgba(0,243,255,0.8)]" style={{ animationDelay: '0.4s', animationDuration: '0.6s' }} />
+                        <span className="eq-bar drop-shadow-[0_0_4px_rgba(248,0,255,0.8)] !bg-pink-500" style={{ animationDelay: '0.1s', animationDuration: '0.5s' }} />
+                      </span>
+                      Playing
                     </span>
-                    Playing
-                  </span>
-                ) : 'Paused'}
+                  ) : 'Paused'}
+                </div>
+              </>
+            ) : (
+              <div className="text-slate-500 text-sm uppercase tracking-widest">No Track Loaded</div>
+            )}
+          </div>
+
+          {/* Progress Bar */}
+          <div className="w-full mt-4 flex items-center gap-3 text-xs text-slate-400 font-mono z-10">
+            <span className="font-medium drop-shadow-sm text-cyan-400/80">{formatTime(currentTime)}</span>
+            <div
+              className="flex-1 py-4 cursor-none relative group flex items-center"
+              onPointerMove={(e) => {
+                const rect = e.currentTarget.getBoundingClientRect();
+                setHoverProgress(Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width)));
+              }}
+              onPointerLeave={() => setHoverProgress(null)}
+              onPointerDown={(e) => {
+                if (duration === 0) return;
+                const rect = e.currentTarget.getBoundingClientRect();
+                const handleMove = (me: PointerEvent) => {
+                  setScrubbingTime(Math.max(0, Math.min(1, (me.clientX - rect.left) / rect.width)) * duration);
+                };
+                const handleUp = (ue: PointerEvent) => {
+                  window.removeEventListener('pointermove', handleMove);
+                  window.removeEventListener('pointerup', handleUp);
+                  seek(Math.max(0, Math.min(1, (ue.clientX - rect.left) / rect.width)) * duration);
+                  setScrubbingTime(null);
+                };
+                window.addEventListener('pointermove', handleMove);
+                window.addEventListener('pointerup', handleUp);
+                setScrubbingTime(Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width)) * duration);
+              }}
+            >
+              <div className="w-full h-2 bg-slate-950/80 rounded-full relative border border-white/5 pointer-events-none">
+                <div
+                  className="absolute top-0 left-0 h-full rounded-full bg-gradient-to-r from-cyan-400 via-pink-400 to-pink-500 transition-all duration-100 ease-linear shadow-[0_0_12px_rgba(248,0,255,0.8)] pointer-events-none"
+                  style={{ width: `${duration > 0 ? ((scrubbingTime !== null ? scrubbingTime : currentTime) / duration) * 100 : 0}%` }}
+                >
+                  <div className="absolute right-0 top-0 bottom-0 w-2 bg-white/50 blur-[2px]" />
+                </div>
               </div>
-            </>
+              <div
+                className={`absolute top-1/2 -translate-y-1/2 w-4 h-4 rounded-full pointer-events-none z-20 flex items-center justify-center backdrop-blur-sm transition-all duration-150 ${scrubbingTime !== null ? 'bg-white/90 border-2 border-pink-500 shadow-[0_0_15px_rgba(248,0,255,0.8)] scale-[1.3]' : 'bg-pink-500/90 border border-white/50 shadow-[0_0_8px_rgba(248,0,255,0.5)] group-hover:scale-110 group-hover:bg-pink-400'}`}
+                style={{ left: `calc(${duration > 0 ? ((scrubbingTime !== null ? scrubbingTime : currentTime) / duration) * 100 : 0}% - 8px)` }}
+              >
+                <div className={`w-1.5 h-1.5 rounded-full ${scrubbingTime !== null ? 'bg-pink-500' : 'bg-white'}`} />
+              </div>
+              {hoverProgress !== null && scrubbingTime === null && (
+                <div
+                  className="absolute top-1/2 -translate-y-1/2 w-4 h-4 bg-white/20 border-2 border-white/40 rounded-full pointer-events-none z-10"
+                  style={{ left: `calc(${hoverProgress * 100}% - 8px)` }}
+                />
+              )}
+            </div>
+            <span className="font-medium drop-shadow-sm text-pink-500/80">{formatTime(duration)}</span>
+          </div>
+        </div>
+
+        {/* Controls */}
+        <div className="flex flex-col gap-3 px-6 py-4 shrink-0 bg-gradient-to-t from-slate-950/80 to-transparent">
+          <div className="flex items-center justify-between">
+            <button
+              onClick={toggleShuffle}
+              className={`p-2 transition-all duration-300 rounded-full ${shuffle ? 'text-pink-500 bg-pink-500/10 shadow-[0_0_15px_rgba(248,0,255,0.4)] drop-shadow-[0_0_5px_#f800ff]' : 'text-slate-500 hover:text-cyan-400 hover:bg-cyan-500/10'}`}
+            >
+              <Shuffle size={18} />
+            </button>
+
+            <div className="flex items-center gap-5">
+              <button onClick={prevTrack} className="text-slate-300 hover:text-cyan-400 drop-shadow-md hover:drop-shadow-[0_0_8px_rgba(0,243,255,0.8)] transition-all hover:-translate-x-0.5">
+                <SkipBack size={26} fill="currentColor" />
+              </button>
+
+              <button
+                onClick={togglePlay}
+                className="w-16 h-16 rounded-full bg-gradient-to-br from-slate-800 to-slate-900 border-2 border-cyan-500/40 flex items-center justify-center text-cyan-400 hover:border-cyan-400 hover:text-cyan-300 transition-all duration-300 hover:scale-105 shadow-[0_0_15px_rgba(0,243,255,0.2)] hover:shadow-[0_0_25px_rgba(0,243,255,0.6)] relative group"
+              >
+                <div className="absolute inset-0 rounded-full bg-cyan-400/20 blur-md opacity-0 group-hover:opacity-100 transition-opacity" />
+                {isPlaying ? <Pause size={28} fill="currentColor" className="z-10" /> : <Play size={28} fill="currentColor" className="ml-1 z-10" />}
+              </button>
+
+              <button onClick={nextTrack} className="text-slate-300 hover:text-cyan-400 drop-shadow-md hover:drop-shadow-[0_0_8px_rgba(0,243,255,0.8)] transition-all hover:translate-x-0.5">
+                <SkipForward size={26} fill="currentColor" />
+              </button>
+            </div>
+
+            <div className="flex items-center gap-1.5">
+              {isMobile && (
+                <button
+                  onClick={toggleEQ}
+                  title="Equalizer"
+                  className={`p-2 transition-all duration-300 rounded-full ${showEQ ? 'text-cyan-400 bg-cyan-400/10' : 'text-slate-500 hover:text-cyan-400 hover:bg-cyan-400/10'}`}
+                >
+                  <svg width="18" height="18" viewBox="0 0 16 16" fill="none">
+                    <rect x="1" y="4" width="2" height="8" rx="1" fill="currentColor"/>
+                    <rect x="5" y="1" width="2" height="14" rx="1" fill="currentColor"/>
+                    <rect x="9" y="3" width="2" height="10" rx="1" fill="currentColor"/>
+                    <rect x="13" y="5" width="2" height="6" rx="1" fill="currentColor"/>
+                  </svg>
+                </button>
+              )}
+              {isMobile && (
+                <button
+                  onClick={() => setShowVisualizer(true)}
+                  title="Visualizer Studio"
+                  className="p-2 transition-all duration-300 rounded-full text-slate-500 hover:text-cyan-400 hover:bg-cyan-400/10 hover:shadow-[0_0_15px_rgba(0,243,255,0.4)]"
+                >
+                  <MonitorPlay size={18} />
+                </button>
+              )}
+              <button
+                onClick={cycleRepeat}
+                className={`p-2 transition-all duration-300 rounded-full ${repeatMode !== 'none' ? 'text-cyan-400 bg-cyan-400/10 shadow-[0_0_15px_rgba(0,243,255,0.4)] drop-shadow-[0_0_5px_#00f3ff]' : 'text-slate-500 hover:text-pink-500 hover:bg-pink-500/10'}`}
+              >
+                {repeatMode === 'one' ? <Repeat1 size={18} /> : <Repeat size={18} />}
+              </button>
+            </div>
+          </div>
+
+          {/* Volume Slider */}
+          <div
+            className="flex items-center justify-center gap-3 w-full max-w-[240px] mx-auto opacity-70 hover:opacity-100 transition-opacity py-4 -my-4"
+            onWheel={(e) => {
+              setVolume(Math.max(0, Math.min(1, volume + (e.deltaY < 0 ? 0.05 : -0.05))));
+            }}
+          >
+            <button onClick={toggleMute} className="text-slate-400 hover:text-cyan-400 transition-colors">
+              {isMuted || volume === 0 ? <VolumeX size={16} /> : <Volume2 size={16} />}
+            </button>
+            <div
+              className="flex-1 py-3 cursor-none relative group flex items-center"
+              onPointerMove={(e) => {
+                const rect = e.currentTarget.getBoundingClientRect();
+                setHoverVolume(Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width)));
+              }}
+              onPointerLeave={() => setHoverVolume(null)}
+              onPointerDown={(e) => {
+                const rect = e.currentTarget.getBoundingClientRect();
+                const handleMove = (me: PointerEvent) => setVolume(Math.max(0, Math.min(1, (me.clientX - rect.left) / rect.width)));
+                const handleUp = () => {
+                  window.removeEventListener('pointermove', handleMove);
+                  window.removeEventListener('pointerup', handleUp);
+                };
+                window.addEventListener('pointermove', handleMove);
+                window.addEventListener('pointerup', handleUp);
+                setVolume(Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width)));
+              }}
+            >
+              <div className="w-full h-1.5 bg-slate-900 rounded-full border border-white/5 pointer-events-none relative">
+                <div
+                  className="absolute top-0 left-0 h-full rounded-full bg-cyan-500 transition-all pointer-events-none"
+                  style={{ width: `${volume * 100}%` }}
+                />
+              </div>
+              <div
+                className={`absolute top-1/2 -translate-y-1/2 w-4 h-4 rounded-full pointer-events-none z-20 flex items-center justify-center backdrop-blur-sm transition-all duration-150 ${volume > 0 ? 'bg-cyan-400 border border-white/50 shadow-[0_0_8px_rgba(0,243,255,0.5)] group-hover:bg-cyan-300 group-hover:scale-110 group-active:bg-white/90 group-active:border-2 group-active:border-cyan-400 group-active:shadow-[0_0_15px_rgba(0,243,255,0.8)] group-active:scale-[1.3]' : 'bg-slate-700 border border-slate-500'}`}
+                style={{ left: `calc(${volume * 100}% - 8px)` }}
+              >
+                <div className="w-1.5 h-1.5 rounded-full bg-white group-active:bg-cyan-500" />
+              </div>
+              {hoverVolume !== null && (
+                <div
+                  className="absolute top-1/2 -translate-y-1/2 w-4 h-4 bg-white/20 border-2 border-cyan-400/40 rounded-full pointer-events-none z-10"
+                  style={{ left: `calc(${hoverVolume * 100}% - 8px)` }}
+                />
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Playlist */}
+        <div className="flex-1 overflow-y-auto bg-slate-900 p-2 border-t border-white/5 relative">
+          {tracks.length === 0 ? (
+            <div className="h-full flex flex-col items-center justify-center text-slate-500 text-sm gap-4 p-8 text-center pt-10">
+              <FolderPlus size={36} className="text-slate-700" />
+              <p>Drag &amp; Drop audio files here or click below to browse</p>
+            </div>
           ) : (
-            <div className="text-slate-500 text-sm uppercase tracking-widest">No Track Loaded</div>
+            <div className="space-y-1">
+              {tracks.map((track, idx) => {
+                const isCurrent = currentIndex === idx;
+                return (
+                  <div
+                    key={track.id}
+                    onClick={() => playTrack(idx)}
+                    className={`group px-3 py-2.5 rounded-md cursor-pointer flex items-center gap-3 text-sm transition-all relative
+                      ${isCurrent ? 'bg-cyan-500/10 text-cyan-400 border-l-2 border-pink-500 font-medium' : 'text-slate-300 hover:bg-white/5 border-l-2 border-transparent'}`}
+                  >
+                    <div className="text-xs text-slate-500 w-4 tracking-tighter tabular-nums">
+                      {isCurrent && isPlaying ? (
+                        <svg className="w-3 h-3 text-pink-500 animate-pulse" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8" fill="currentColor"/></svg>
+                      ) : (idx + 1)}
+                    </div>
+                    <div className="flex-1 truncate">{track.name}</div>
+                    <button
+                      onClick={(e) => removeTrack(e, idx)}
+                      className="opacity-0 group-hover:opacity-100 p-1.5 text-slate-500 hover:text-pink-500 transition-colors shrink-0"
+                      title="Remove track"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
           )}
         </div>
 
-        {/* Progress Bar Container - Zvětšená hit area pomocí py-4 */}
-        <div className="w-full mt-4 flex items-center gap-3 text-xs text-slate-400 font-mono z-10">
-          <span className="font-medium drop-shadow-sm text-cyan-400/80">{formatTime(currentTime)}</span>
-          <div 
-            className="flex-1 py-4 cursor-none relative group flex items-center"
-            onPointerMove={(e) => {
-              const rect = e.currentTarget.getBoundingClientRect();
-              setHoverProgress(Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width)));
-            }}
-            onPointerLeave={() => setHoverProgress(null)}
-            onPointerDown={(e) => {
-              if (duration === 0) return;
-              const rect = e.currentTarget.getBoundingClientRect();
-              
-              const handleMove = (moveEvent: PointerEvent) => {
-                const percent = Math.max(0, Math.min(1, (moveEvent.clientX - rect.left) / rect.width));
-                setScrubbingTime(percent * duration);
-              };
-              
-              const handleUp = (upEvent: PointerEvent) => {
-                window.removeEventListener('pointermove', handleMove);
-                window.removeEventListener('pointerup', handleUp);
-                const percent = Math.max(0, Math.min(1, (upEvent.clientX - rect.left) / rect.width));
-                seek(percent * duration);
-                setScrubbingTime(null);
-              };
-              
-              window.addEventListener('pointermove', handleMove);
-              window.addEventListener('pointerup', handleUp);
-              
-              // Handle initial click
-              const percent = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-              setScrubbingTime(percent * duration);
-            }}
+        {/* Footer */}
+        <div className="shrink-0 p-3 bg-slate-950 border-t border-white/5 flex gap-2">
+          <input type="file" multiple accept="audio/*,.wav,.mp3,.flac,.ogg,.m4a,.aac,.wma" className="hidden" ref={fileInputRef} onChange={handleFileChange} />
+          <input type="file" multiple accept="audio/*,.wav,.mp3,.flac,.ogg,.m4a,.aac,.wma" className="hidden" ref={fileInputOpenRef} onChange={handleFileOpen} />
+
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            className="flex-1 flex items-center justify-center gap-2 py-2.5 px-3 rounded-md bg-slate-900 border border-slate-700 text-slate-300 hover:border-cyan-500/60 hover:text-cyan-400 hover:shadow-[0_0_12px_rgba(0,243,255,0.2)] transition-all duration-300 text-xs font-bold uppercase tracking-[0.15em]"
           >
-            {/* Visual Track */}
-            <div className="w-full h-2 bg-slate-950/80 rounded-full relative border border-white/5 pointer-events-none">
-              <div 
-                className="absolute top-0 left-0 h-full rounded-full bg-gradient-to-r from-cyan-400 via-pink-400 to-pink-500 transition-all duration-100 ease-linear shadow-[0_0_12px_rgba(248,0,255,0.8)] pointer-events-none"
-                style={{ width: `${duration > 0 ? ((scrubbingTime !== null ? scrubbingTime : currentTime) / duration) * 100 : 0}%` }}
-              >
-                <div className="absolute right-0 top-0 bottom-0 w-2 bg-white/50 blur-[2px]"></div>
-              </div>
-            </div>
-
-            {/* JEDNOTNÁ KULIČKA (Persistent & Scrubbing) */}
-            <div 
-              className={`absolute top-1/2 -translate-y-1/2 w-4 h-4 rounded-full pointer-events-none z-20 flex items-center justify-center backdrop-blur-sm transition-all duration-150 ${scrubbingTime !== null ? 'bg-white/90 border-2 border-pink-500 shadow-[0_0_15px_rgba(248,0,255,0.8)] scale-[1.3]' : 'bg-pink-500/90 border border-white/50 shadow-[0_0_8px_rgba(248,0,255,0.5)] group-hover:scale-110 group-hover:bg-pink-400'}`}
-              style={{ left: `calc(${duration > 0 ? ((scrubbingTime !== null ? scrubbingTime : currentTime) / duration) * 100 : 0}% - 8px)` }}
-            >
-              <div className={`w-1.5 h-1.5 rounded-full ${scrubbingTime !== null ? 'bg-pink-500' : 'bg-white'}`}></div>
-            </div>
-
-            {/* Tečka ukazující náhled místa pod myší (GHOST dot) */}
-            {hoverProgress !== null && scrubbingTime === null && (
-              <div 
-                className="absolute top-1/2 -translate-y-1/2 w-4 h-4 bg-white/20 border-2 border-white/40 rounded-full pointer-events-none z-10"
-                style={{ left: `calc(${hoverProgress * 100}% - 8px)` }}
-              ></div>
-            )}
-          </div>
-          <span className="font-medium drop-shadow-sm text-pink-500/80">{formatTime(duration)}</span>
-        </div>
-      </div>
-
-      {/* Controls */}
-      <div className="flex flex-col gap-3 px-6 py-4 shrink-0 bg-gradient-to-t from-slate-950/80 to-transparent">
-        <div className="flex items-center justify-between">
-          <button 
-            onClick={toggleShuffle} 
-            className={`p-2 transition-all duration-300 rounded-full ${shuffle ? 'text-pink-500 bg-pink-500/10 shadow-[0_0_15px_rgba(248,0,255,0.4)] drop-shadow-[0_0_5px_#f800ff]' : 'text-slate-500 hover:text-cyan-400 hover:bg-cyan-500/10'}`}
-          >
-            <Shuffle size={18} />
+            <FolderPlus size={15} />
+            Přidat
           </button>
 
-          <div className="flex items-center gap-5">
-            <button onClick={prevTrack} className="text-slate-300 hover:text-cyan-400 drop-shadow-md hover:drop-shadow-[0_0_8px_rgba(0,243,255,0.8)] transition-all hover:-translate-x-0.5">
-              <SkipBack size={26} fill="currentColor" />
-            </button>
-
-            <button 
-              onClick={togglePlay} 
-              className="w-16 h-16 rounded-full bg-gradient-to-br from-slate-800 to-slate-900 border-2 border-cyan-500/40 flex items-center justify-center text-cyan-400 hover:border-cyan-400 hover:text-cyan-300 transition-all duration-300 hover:scale-105 shadow-[0_0_15px_rgba(0,243,255,0.2)] hover:shadow-[0_0_25px_rgba(0,243,255,0.6)] relative group"
-            >
-              <div className="absolute inset-0 rounded-full bg-cyan-400/20 blur-md opacity-0 group-hover:opacity-100 transition-opacity"></div>
-              {isPlaying ? <Pause size={28} fill="currentColor" className="z-10" /> : <Play size={28} fill="currentColor" className="ml-1 z-10" />}
-            </button>
-
-            <button onClick={nextTrack} className="text-slate-300 hover:text-cyan-400 drop-shadow-md hover:drop-shadow-[0_0_8px_rgba(0,243,255,0.8)] transition-all hover:translate-x-0.5">
-              <SkipForward size={26} fill="currentColor" />
-            </button>
-          </div>
-
-          <div className="flex items-center gap-2">
-            {isMobile && (
-              <button 
-                onClick={() => setShowVisualizer(true)} 
-                title="Visualizer Studio"
-                className="p-2 transition-all duration-300 rounded-full text-slate-500 hover:text-cyan-400 hover:bg-cyan-400/10 hover:shadow-[0_0_15px_rgba(0,243,255,0.4)]"
-              >
-                <MonitorPlay size={18} />
-              </button>
-            )}
-            <button 
-              onClick={cycleRepeat} 
-              className={`p-2 transition-all duration-300 rounded-full ${repeatMode !== 'none' ? 'text-cyan-400 bg-cyan-400/10 shadow-[0_0_15px_rgba(0,243,255,0.4)] drop-shadow-[0_0_5px_#00f3ff]' : 'text-slate-500 hover:text-pink-500 hover:bg-pink-500/10'}`}
-            >
-              {repeatMode === 'one' ? <Repeat1 size={18} /> : <Repeat size={18} />}
-            </button>
-          </div>
-        </div>
-
-        {/* Volume Slider */}
-        <div 
-          className="flex items-center justify-center gap-3 w-full max-w-[240px] mx-auto opacity-70 hover:opacity-100 transition-opacity py-4 -my-4"
-          onWheel={(e) => {
-            const step = 0.05; // 5% vol up/down na jedno "cvaknutí" kolečkem
-            setVolume(Math.max(0, Math.min(1, volume + (e.deltaY < 0 ? step : -step))));
-          }}
-        >
-          <button onClick={toggleMute} className="text-slate-400 hover:text-cyan-400 transition-colors">
-            {isMuted || volume === 0 ? <VolumeX size={16} /> : <Volume2 size={16} />}
-          </button>
-          {/* Volume Slider Hit Area zvětšená pomocí py-3 a w-full */}
-          <div 
-            className="flex-1 py-3 cursor-none relative group flex items-center"
-            onPointerMove={(e) => {
-              const rect = e.currentTarget.getBoundingClientRect();
-              setHoverVolume(Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width)));
-            }}
-            onPointerLeave={() => setHoverVolume(null)}
-            onPointerDown={(e) => {
-              const rect = e.currentTarget.getBoundingClientRect();
-              
-              const handleMove = (moveEvent: PointerEvent) => {
-                const percent = Math.max(0, Math.min(1, (moveEvent.clientX - rect.left) / rect.width));
-                setVolume(percent);
-              };
-              
-              const handleUp = () => {
-                window.removeEventListener('pointermove', handleMove);
-                window.removeEventListener('pointerup', handleUp);
-              };
-              
-              window.addEventListener('pointermove', handleMove);
-              window.addEventListener('pointerup', handleUp);
-              
-              // Handle initial click
-              const percent = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-              setVolume(percent);
-            }}
+          <button
+            onClick={() => fileInputOpenRef.current?.click()}
+            className="flex-1 flex items-center justify-center gap-2 py-2.5 px-3 rounded-md bg-gradient-to-r from-slate-800 to-slate-900 border border-cyan-500/30 text-cyan-400 hover:border-pink-500 hover:text-pink-400 hover:shadow-[0_0_15px_rgba(248,0,255,0.3)] transition-all duration-300 text-xs font-bold uppercase tracking-[0.2em]"
           >
-            {/* Visual Track */}
-            <div className="w-full h-1.5 bg-slate-900 rounded-full border border-white/5 pointer-events-none relative">
-              <div 
-                className="absolute top-0 left-0 h-full rounded-full bg-cyan-500 transition-all pointer-events-none"
-                style={{ width: `${volume * 100}%` }}
-              ></div>
-            </div>
-
-            {/* JEDNOTNÁ KULIČKA VOLUME */}
-            <div 
-              className={`absolute top-1/2 -translate-y-1/2 w-4 h-4 rounded-full pointer-events-none z-20 flex items-center justify-center backdrop-blur-sm transition-all duration-150 ${volume > 0 ? 'bg-cyan-400 border border-white/50 shadow-[0_0_8px_rgba(0,243,255,0.5)] group-hover:bg-cyan-300 group-hover:scale-110 group-active:bg-white/90 group-active:border-2 group-active:border-cyan-400 group-active:shadow-[0_0_15px_rgba(0,243,255,0.8)] group-active:scale-[1.3]' : 'bg-slate-700 border border-slate-500'}`}
-              style={{ left: `calc(${volume * 100}% - 8px)` }}
-            >
-              <div className="w-1.5 h-1.5 rounded-full bg-white group-active:bg-cyan-500"></div>
-            </div>
-
-            {/* GHOST dot */}
-            {hoverVolume !== null && (
-              <div 
-                className="absolute top-1/2 -translate-y-1/2 w-4 h-4 bg-white/20 border-2 border-cyan-400/40 rounded-full pointer-events-none z-10"
-                style={{ left: `calc(${hoverVolume * 100}% - 8px)` }}
-              ></div>
-            )}
-          </div>
+            <FolderOpen size={15} className="drop-shadow-[0_0_5px_currentColor]" />
+            Otevřít
+          </button>
         </div>
       </div>
+      {/* ── END LEFT COLUMN ── */}
 
-      {/* Playlist */}
-      <div className="flex-1 overflow-y-auto bg-slate-900 p-2 border-t border-white/5 relative">
-        {tracks.length === 0 ? (
-          <div className="h-full flex flex-col items-center justify-center text-slate-500 text-sm gap-4 p-8 text-center pt-10">
-            <FolderPlus size={36} className="text-slate-700" />
-            <p>Drag & Drop audio files here or click below to browse</p>
-          </div>
-        ) : (
-          <div className="space-y-1">
-            {tracks.map((track, idx) => {
-              const isCurrent = currentIndex === idx;
-              return (
-                <div 
-                  key={track.id}
-                  onClick={() => playTrack(idx)}
-                  className={`
-                    group px-3 py-2.5 rounded-md cursor-pointer flex items-center gap-3 text-sm transition-all relative
-                    ${isCurrent ? 'bg-cyan-500/10 text-cyan-400 border-l-2 border-pink-500 font-medium' : 'text-slate-300 hover:bg-white/5 border-l-2 border-transparent'}
-                  `}
-                >
-                  <div className="text-xs text-slate-500 w-4 tracking-tighter tabular-nums">
-                    {isCurrent && isPlaying ? (
-                       <svg className="w-3 h-3 text-pink-500 animate-pulse" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8" fill="currentColor"/></svg>
-                    ) : (idx + 1)}
-                  </div>
-                  <div className="flex-1 truncate">{track.name}</div>
-                  <button 
-                    onClick={(e) => removeTrack(e, idx)}
-                    className="opacity-0 group-hover:opacity-100 p-1.5 text-slate-500 hover:text-pink-500 transition-colors shrink-0"
-                    title="Remove track"
-                  >
-                    <Trash2 size={14} />
-                  </button>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
+      {/* ── RIGHT COLUMN – EQ SIDE PANEL ── */}
+      <Equalizer
+        audioRef={audioRef}
+        isOpen={showEQ}
+        onClose={toggleEQ}
+        onPresetChange={setActivePreset}
+      />
 
       <audio ref={audioRef} preload="auto" className="hidden" />
 
-      {/* Footer */}
-      <div className="shrink-0 p-3 bg-slate-950 border-t border-white/5 flex gap-2">
-        {/* Skryté file inputy */}
-        <input type="file" multiple accept="audio/*,audio/aac,audio/mp4,audio/mpeg,audio/mpegurl,audio/ogg,audio/vnd.rn-realaudio,audio/vorbis,audio/x-flac,audio/x-mp3,audio/x-mpegurl,audio/x-ms-wma,audio/x-musepack,audio/x-oggflac,audio/x-pn-realaudio,audio/x-scpls,audio/x-speex,audio/x-vorbis,audio/x-vorbis+ogg,audio/x-wav,.wav,.mp3,.flac,.ogg,.m4a,.aac,.wma" className="hidden" ref={fileInputRef} onChange={handleFileChange} />
-        <input type="file" multiple accept="audio/*,audio/aac,audio/mp4,audio/mpeg,audio/mpegurl,audio/ogg,audio/vnd.rn-realaudio,audio/vorbis,audio/x-flac,audio/x-mp3,audio/x-mpegurl,audio/x-ms-wma,audio/x-musepack,audio/x-oggflac,audio/x-pn-realaudio,audio/x-scpls,audio/x-speex,audio/x-vorbis,audio/x-vorbis+ogg,audio/x-wav,.wav,.mp3,.flac,.ogg,.m4a,.aac,.wma" className="hidden" ref={fileInputOpenRef} onChange={handleFileOpen} />
-
-        {/* Přidat – přidá do existujícího playlistu */}
-        <button
-          onClick={() => fileInputRef.current?.click()}
-          className="flex-1 flex items-center justify-center gap-2 py-2.5 px-3 rounded-md bg-slate-900 border border-slate-700 text-slate-300 hover:border-cyan-500/60 hover:text-cyan-400 hover:shadow-[0_0_12px_rgba(0,243,255,0.2)] transition-all duration-300 text-xs font-bold uppercase tracking-[0.15em]"
-        >
-          <FolderPlus size={15} />
-          Přidat
-        </button>
-
-        {/* Otevřít – vymaže playlist a načte nový */}
-        <button
-          onClick={() => fileInputOpenRef.current?.click()}
-          className="flex-1 flex items-center justify-center gap-2 py-2.5 px-3 rounded-md bg-gradient-to-r from-slate-800 to-slate-900 border border-cyan-500/30 text-cyan-400 hover:border-pink-500 hover:text-pink-400 hover:shadow-[0_0_15px_rgba(248,0,255,0.3)] transition-all duration-300 text-xs font-bold uppercase tracking-[0.2em]"
-        >
-          <FolderOpen size={15} className="drop-shadow-[0_0_5px_currentColor]" />
-          Otevřít
-        </button>
-      </div>
-
       {/* Visualizer Studio Overlay */}
       {showVisualizer && (
-        <VisualizerStudio 
-          audioRef={audioRef} 
-          isPlaying={isPlaying} 
-          onClose={() => setShowVisualizer(false)} 
+        <VisualizerStudio
+          audioRef={audioRef}
+          isPlaying={isPlaying}
+          onClose={() => setShowVisualizer(false)}
         />
       )}
     </div>

@@ -49,3 +49,12 @@ html, body {
   border-radius: 2px 2px 0 0;
   animation: equalizer 0.5s ease-in-out infinite alternate;
 }
+
+/* Vertical EQ slider – hidden but functional input overlay */
+input[type="range"].eq-slider-vertical {
+  -webkit-appearance: slider-vertical;
+  appearance: slider-vertical;
+  writing-mode: vertical-lr;
+  direction: rtl;
+  cursor: ns-resize;
+}
