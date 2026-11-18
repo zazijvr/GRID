@@ -71,10 +71,10 @@ export function createHex(): Effect {
         }
         const level = levelOf(f, h.band);
         color.setHSL(0.5 + (h.band / SPECTRUM_BANDS) * 0.38, 1, 0.45 + level * 0.25);
-        h.mat.color.copy(color).lerp(white, f.pulse * 0.6);
+        h.mat.color.copy(color).lerp(white, f.pulse * 0.4);
         // Blízko kamery zprůhlednit (neproletí obrazovkou jako zeď)
         const near = THREE.MathUtils.smoothstep(h.mesh.position.z, 18, 32);
-        h.mat.opacity = (0.2 + level * 0.8) * (1 - near);
+        h.mat.opacity = (0.15 + level * 0.65) * (1 - near);
         const sc = 1 + level * 0.55 + f.bassN * 0.15 + f.pulse * 0.1;
         h.mesh.scale.set(sc, sc, 1);
       }

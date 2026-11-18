@@ -15,11 +15,9 @@
         "title": "Zažij VR Grid",
         "width": 350,
         "height": 600,
-        "minWidth": 300,
-        "minHeight": 400,
         "decorations": false,
         "transparent": true,
-        "resizable": true
+        "resizable": false
       }
     ],
     "security": {

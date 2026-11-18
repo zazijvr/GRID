@@ -1,4 +1,4 @@
-import React, { useRef, useState, useCallback, useEffect, lazy, Suspense } from 'react';
+import React, { useRef, useState, useCallback, lazy, Suspense } from 'react';
 import { 
   Play, Pause, SkipForward, SkipBack, Shuffle, Repeat, Repeat1, FolderPlus, FolderOpen, Trash2, Volume2, VolumeX, Minimize2, X, MonitorPlay 
 } from 'lucide-react';
@@ -14,17 +14,7 @@ const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/
 
 const PLAYER_WIDTH  = 350; // px – šířka přehrávače
 const EQ_PANEL_WIDTH = 280; // px – šířka EQ panelu
-const VIZ_DEFAULT_WIDTH = 640; // px – visualizer vlevo od přehrávače (počítač)
-const VIZ_MIN_WIDTH = 320;
-const VIZ_WIDTH_KEY = 'zvr-grid-viz-width';
-const readVizWidth = () => {
-  try {
-    const v = Number(localStorage.getItem(VIZ_WIDTH_KEY));
-    return Number.isFinite(v) && v >= VIZ_MIN_WIDTH && v <= 8000 ? v : VIZ_DEFAULT_WIDTH;
-  } catch {
-    return VIZ_DEFAULT_WIDTH;
-  }
-};
+const VIZ_WIDTH = 520; // px – visualizer vedle přehrávače (pevný malý formát, velký = celá obrazovka)
 const isTauri = () => !!window.__TAURI_INTERNALS__;
 /** Linux (počítač): okno nejde posunout doleva (Wayland) → pořadí přehrávač | visualizer | ekvalizér */
 const vizOnRight = /Linux/.test(navigator.userAgent) && !isMobile;
@@ -72,7 +62,6 @@ function App() {
   // Šířka okna = [visualizer] + přehrávač + [ekvalizér]. Výšku, kterou si uživatel nastavil, nechá.
   // shiftLeft: o kolik posunout okno doleva (visualizer roste vlevo, přehrávač zůstane na místě) –
   // na Waylandu aplikace polohu okna měnit nesmí, tam okno jen poroste doprava.
-  const vizWidthRef = useRef(readVizWidth());
   const programmaticResize = useRef(0);
   const resizeWindow = useCallback(async (width: number, shiftLeft = 0) => {
     if (!isTauri() || isMobile) return;
@@ -91,7 +80,7 @@ function App() {
 
   const toggleEQ = useCallback(() => {
     const next = !showEQ;
-    const viz = showVisualizer && !isMobile ? vizWidthRef.current : 0;
+    const viz = showVisualizer && !isMobile ? VIZ_WIDTH : 0;
     if (next) {
       // Otevřít: nejdřív rozšiř okno → pak zobraz panel
       resizeWindow(fixedWidth(true) + viz)
@@ -106,36 +95,13 @@ function App() {
 
   const openVisualizer = useCallback(() => {
     setShowVisualizer(true);
-    if (!isMobile) resizeWindow(fixedWidth(showEQ) + vizWidthRef.current, vizOnRight ? 0 : vizWidthRef.current).catch(() => {});
+    if (!isMobile) resizeWindow(fixedWidth(showEQ) + VIZ_WIDTH, vizOnRight ? 0 : VIZ_WIDTH).catch(() => {});
   }, [showEQ, resizeWindow]);
 
   const closeVisualizer = useCallback(() => {
     setShowVisualizer(false);
-    if (!isMobile) resizeWindow(fixedWidth(showEQ), vizOnRight ? 0 : -vizWidthRef.current).catch(() => {});
+    if (!isMobile) resizeWindow(fixedWidth(showEQ), vizOnRight ? 0 : -VIZ_WIDTH).catch(() => {});
   }, [showEQ, resizeWindow]);
-
-  // Uživatel zvětšil / zmenšil okno s visualizerem → zapamatovat šířku visualizeru
-  useEffect(() => {
-    if (!showVisualizer || isMobile) return;
-    let t = 0;
-    const onResize = () => {
-      clearTimeout(t);
-      t = window.setTimeout(() => {
-        if (Date.now() - programmaticResize.current < 800) return; // naše vlastní změna velikosti
-        const w = window.innerWidth - fixedWidth(showEQ);
-        if (w >= VIZ_MIN_WIDTH) {
-          vizWidthRef.current = w;
-          try { localStorage.setItem(VIZ_WIDTH_KEY, String(Math.round(w))); } catch { /* jen se nezapamatuje */ }
-        }
-      }, 300);
-    };
-    window.addEventListener('resize', onResize);
-    return () => { clearTimeout(t); window.removeEventListener('resize', onResize); };
-  }, [showVisualizer, showEQ]);
-
-  const startResize = (direction: 'West' | 'SouthWest' | 'East' | 'SouthEast') => {
-    if (isTauri()) tauriWindow().then((w) => w.startResizeDragging(direction)).catch(() => {});
-  };
 
   const formatTime = (time: number) => {
     if (isNaN(time) || !isFinite(time)) return '0:00';
@@ -180,7 +146,7 @@ function App() {
   // Visualizer (počítač): Windows / X11 vlevo od přehrávače (okno se posune doleva),
   // Linux vpravo – Wayland aplikaci posouvat okno nedovolí, rostlo by jen doprava
   const visualizerPanel = (
-    <div className="relative flex-1 min-w-0 h-full">
+    <div className="relative shrink-0 h-full" style={{ width: VIZ_WIDTH }}>
       <Suspense fallback={null}>
         <VisualizerStudio
           docked
@@ -190,8 +156,13 @@ function App() {
           currentTime={currentTime}
           duration={duration}
           onClose={closeVisualizer}
-          onResizeStart={startResize}
-          resizeSide={vizOnRight ? 'right' : 'left'}
+          volume={volume}
+          onTogglePlay={togglePlay}
+          onNext={nextTrack}
+          onPrev={prevTrack}
+          onSeek={seek}
+          onVolume={setVolume}
+          side={vizOnRight ? 'right' : 'left'}
           onDragStart={() => { if (isTauri()) tauriWindow().then((w) => w.startDragging()); }}
         />
       </Suspense>
@@ -531,6 +502,12 @@ function App() {
             currentTime={currentTime}
             duration={duration}
             onClose={closeVisualizer}
+          volume={volume}
+          onTogglePlay={togglePlay}
+          onNext={nextTrack}
+          onPrev={prevTrack}
+          onSeek={seek}
+          onVolume={setVolume}
           />
         </Suspense>
       )}

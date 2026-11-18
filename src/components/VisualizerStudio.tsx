@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { X, Maximize, Minimize, ChevronLeft, ChevronRight, Shuffle } from 'lucide-react';
+import { X, Maximize, Minimize, ChevronLeft, ChevronRight, Shuffle, Play, Pause, SkipBack, SkipForward, Volume2, VolumeX } from 'lucide-react';
 import { getAudioGraph } from '../audio/audioGraph';
 import { AudioAnalyzer } from '../visualizer/audioFeatures';
 import { VisualizerEngine, type Effect } from '../visualizer/engine';
@@ -19,10 +19,15 @@ interface VisualizerStudioProps {
   onClose: () => void;
   /** Počítač: panel vlevo od přehrávače (jinak překryv přes celé okno – telefon) */
   docked?: boolean;
-  /** Změna velikosti okna tahem za okraj / roh */
-  onResizeStart?: (direction: 'West' | 'SouthWest' | 'East' | 'SouthEast') => void;
-  /** Na které straně je okraj okna (visualizer vlevo od přehrávače = 'left', vpravo = 'right') */
-  resizeSide?: 'left' | 'right';
+  /** Na které straně je přehrávač (okraj panelu) */
+  side?: 'left' | 'right';
+  /** Ovládání přehrávání (na celé obrazovce) */
+  volume: number;
+  onTogglePlay: () => void;
+  onNext: () => void;
+  onPrev: () => void;
+  onSeek: (seconds: number) => void;
+  onVolume: (v: number | ((prev: number) => number)) => void;
   /** Přesun okna za prázdné místo horní lišty */
   onDragStart?: () => void;
 }
@@ -44,7 +49,7 @@ const readSettings = (): { effect: number; auto: boolean } => {
 
 const formatTime = (s: number) => (Number.isFinite(s) && s > 0 ? `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}` : '0:00');
 
-export function VisualizerStudio({ audioRef, isPlaying, trackName, currentTime, duration, onClose, docked = false, onResizeStart, onDragStart, resizeSide = 'left' }: VisualizerStudioProps) {
+export function VisualizerStudio({ audioRef, isPlaying, trackName, currentTime, duration, onClose, docked = false, onDragStart, side = 'left', volume, onTogglePlay, onNext, onPrev, onSeek, onVolume }: VisualizerStudioProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const engineRef = useRef<VisualizerEngine | null>(null);
@@ -141,13 +146,14 @@ export function VisualizerStudio({ audioRef, isPlaying, trackName, currentTime, 
       else if (e.key === 'ArrowLeft') step(-1);
       else if (e.key === 'f' || e.key === 'F') toggleFullscreen();
       else if (e.key === 'a' || e.key === 'A') setAutoCycle((a) => !a);
+      else if (e.key === ' ') onTogglePlay();
       else if (e.key === 'Escape' && !document.fullscreenElement) onClose();
       else return;
       e.preventDefault();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [step, toggleFullscreen, onClose]);
+  }, [step, toggleFullscreen, onClose, onTogglePlay]);
 
   // ── Ovládání se po 3 s bez pohybu myši schová (na celé obrazovce) ──
   useEffect(() => {
@@ -163,44 +169,20 @@ export function VisualizerStudio({ audioRef, isPlaying, trackName, currentTime, 
     return () => { clearTimeout(t); el?.removeEventListener('pointermove', wake); };
   }, []);
   const hideUi = isFullscreen && idle;
+  // Ovládání přehrávání: na celé obrazovce a na telefonu (v panelu je přehrávač hned vedle)
+  const showControls = isFullscreen || !docked;
+  const [scrub, setScrub] = useState<number | null>(null);
+  const lastVolume = useRef(volume || 1);
+  if (volume > 0) lastVolume.current = volume;
+  const ctrlBtn = 'p-2 text-slate-300 hover:text-cyan-300 hover:drop-shadow-[0_0_8px_rgba(0,243,255,0.8)] transition-all';
 
   const btn = 'p-3 bg-slate-900/70 rounded-full border border-white/10 text-slate-300 hover:text-cyan-400 hover:border-cyan-400/50 hover:shadow-[0_0_15px_rgba(0,243,255,0.5)] transition-all';
 
   return (
     <div
       ref={containerRef}
-      className={`${docked ? `relative w-full h-full ${resizeSide === 'right' ? 'border-l' : 'border-r'} border-cyan-500/30` : 'absolute inset-0 z-50'} flex items-center justify-center bg-black overflow-hidden ${!isFullscreen && !docked ? 'rounded-3xl border-2 border-cyan-500/20 shadow-[0_0_50px_rgba(0,243,255,0.15)] m-4' : ''} ${hideUi ? 'cursor-none' : ''}`}
+      className={`${docked ? `relative w-full h-full ${side === 'right' ? 'border-l' : 'border-r'} border-cyan-500/30` : 'absolute inset-0 z-50'} flex items-center justify-center bg-black overflow-hidden ${!isFullscreen && !docked ? 'rounded-3xl border-2 border-cyan-500/20 shadow-[0_0_50px_rgba(0,243,255,0.15)] m-4' : ''} ${hideUi ? 'cursor-none' : ''}`}
     >
-      {/* Změna velikosti: levý okraj a levý dolní roh (okno je bez systémového rámečku) */}
-      {docked && !isFullscreen && onResizeStart && resizeSide === 'right' && (
-        <div
-          className="absolute right-0 bottom-0 w-6 h-6 z-30 cursor-nwse-resize"
-          onPointerDown={(e) => { if (e.button === 0) onResizeStart('SouthEast'); }}
-          title="Táhnutím změníte velikost"
-        >
-          <svg viewBox="0 0 24 24" className="w-full h-full text-cyan-400/60 hover:text-cyan-300">
-            <path d="M20 10v10H10M20 15l-5 5" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" />
-          </svg>
-        </div>
-      )}
-      {docked && !isFullscreen && onResizeStart && resizeSide === 'left' && (
-        <>
-          <div
-            className="absolute left-0 top-0 bottom-6 w-1.5 z-30 cursor-ew-resize hover:bg-cyan-400/30 transition-colors"
-            onPointerDown={(e) => { if (e.button === 0) onResizeStart('West'); }}
-            title="Táhnutím změníte šířku"
-          />
-          <div
-            className="absolute left-0 bottom-0 w-6 h-6 z-30 cursor-nesw-resize"
-            onPointerDown={(e) => { if (e.button === 0) onResizeStart('SouthWest'); }}
-            title="Táhnutím změníte velikost"
-          >
-            <svg viewBox="0 0 24 24" className="w-full h-full text-cyan-400/60 hover:text-cyan-300">
-              <path d="M4 10v10h10M4 15l5 5M4 20" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" />
-            </svg>
-          </div>
-        </>
-      )}
       <canvas
         ref={canvasRef}
         className="w-full h-full absolute inset-0 z-0 transition-opacity duration-200"
@@ -209,13 +191,12 @@ export function VisualizerStudio({ audioRef, isPlaying, trackName, currentTime, 
 
       {error && <div className="relative z-10 px-6 text-center text-slate-300">{error}</div>}
 
-      {/* Název efektu po přepnutí */}
+      {/* Název efektu po přepnutí – malý štítek nahoře, aby nezakrýval efekt */}
       <div
-        className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-10 pointer-events-none text-center transition-all duration-700 ${showName ? 'opacity-100 scale-100' : 'opacity-0 scale-95'}`}
+        className={`absolute top-5 md:top-7 left-1/2 -translate-x-1/2 z-30 pointer-events-none transition-all duration-700 ${showName ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-2'}`}
       >
-        <div className="text-[10px] tracking-[0.5em] text-cyan-300/70 uppercase">Mode {effectIndex + 1} / {EFFECTS.length}</div>
-        <div className="mt-1 text-2xl md:text-4xl font-black tracking-[0.2em] uppercase text-white drop-shadow-[0_0_18px_rgba(0,243,255,0.9)]">
-          {EFFECT_NAMES[effectIndex]}
+        <div className="px-3 py-1.5 rounded-full bg-black/55 border border-cyan-400/30 text-[11px] font-bold tracking-[0.25em] uppercase text-cyan-200 whitespace-nowrap shadow-[0_0_12px_rgba(0,243,255,0.25)]">
+          {EFFECT_NAMES[effectIndex]} <span className="text-cyan-400/60 font-normal">{effectIndex + 1}/{EFFECTS.length}</span>
         </div>
       </div>
 
@@ -246,9 +227,9 @@ export function VisualizerStudio({ audioRef, isPlaying, trackName, currentTime, 
         </div>
       </div>
 
-      {/* Skladba dole */}
+      {/* Skladba dole; na celé obrazovce (a na telefonu) i ovládání přehrávání */}
       {trackName && (
-        <div className={`absolute bottom-0 inset-x-0 z-20 px-6 pb-5 pt-16 bg-gradient-to-t from-black/70 to-transparent pointer-events-none transition-opacity duration-500 ${hideUi ? 'opacity-40' : 'opacity-100'}`}>
+        <div className={`absolute bottom-0 inset-x-0 z-20 px-6 pb-5 pt-16 bg-gradient-to-t from-black/75 to-transparent transition-opacity duration-500 ${hideUi ? 'opacity-0' : 'opacity-100'} ${showControls ? '' : 'pointer-events-none'}`}>
           <div className="max-w-3xl mx-auto">
             <div className="flex items-end justify-between gap-4">
               <div className="min-w-0">
@@ -259,12 +240,61 @@ export function VisualizerStudio({ audioRef, isPlaying, trackName, currentTime, 
                 {formatTime(currentTime)} / {formatTime(duration)}
               </div>
             </div>
-            <div className="mt-2 h-1 rounded-full bg-white/10 overflow-hidden">
-              <div
-                className="h-full bg-gradient-to-r from-cyan-400 to-pink-500 shadow-[0_0_10px_rgba(248,0,255,0.8)]"
-                style={{ width: `${duration > 0 ? Math.min(100, (currentTime / duration) * 100) : 0}%` }}
-              />
+            <div
+              className={`mt-2 relative ${showControls ? 'py-2 -my-2 cursor-pointer group' : ''}`}
+              onPointerDown={showControls ? (e) => {
+                if (duration <= 0) return;
+                const rect = e.currentTarget.getBoundingClientRect();
+                const at = (x: number) => Math.max(0, Math.min(1, (x - rect.left) / rect.width)) * duration;
+                const el = e.currentTarget;
+                el.setPointerCapture(e.pointerId);
+                setScrub(at(e.clientX));
+                const move = (me: PointerEvent) => setScrub(at(me.clientX));
+                const up = (ue: PointerEvent) => {
+                  el.removeEventListener('pointermove', move);
+                  el.removeEventListener('pointerup', up);
+                  onSeek(at(ue.clientX));
+                  setScrub(null);
+                };
+                el.addEventListener('pointermove', move);
+                el.addEventListener('pointerup', up);
+              } : undefined}
+            >
+              <div className={`rounded-full bg-white/10 overflow-hidden transition-all ${showControls ? 'h-1.5 group-hover:h-2.5' : 'h-1'}`}>
+                <div
+                  className="h-full bg-gradient-to-r from-cyan-400 to-pink-500 shadow-[0_0_10px_rgba(248,0,255,0.8)]"
+                  style={{ width: `${duration > 0 ? Math.min(100, ((scrub ?? currentTime) / duration) * 100) : 0}%` }}
+                />
+              </div>
             </div>
+
+            {showControls && (
+              <div className="mt-4 flex items-center justify-between gap-4">
+                <div className="w-40 hidden sm:block" />
+                <div className="flex items-center gap-5">
+                  <button onClick={onPrev} title="Předchozí" className={ctrlBtn}><SkipBack size={22} fill="currentColor" /></button>
+                  <button
+                    onClick={onTogglePlay}
+                    title="Přehrát / pauza (mezerník)"
+                    className="w-14 h-14 rounded-full border-2 border-cyan-400/60 bg-black/50 text-cyan-300 flex items-center justify-center hover:border-cyan-300 hover:shadow-[0_0_20px_rgba(0,243,255,0.6)] transition-all"
+                  >
+                    {isPlaying ? <Pause size={24} fill="currentColor" /> : <Play size={24} fill="currentColor" className="ml-1" />}
+                  </button>
+                  <button onClick={onNext} title="Další" className={ctrlBtn}><SkipForward size={22} fill="currentColor" /></button>
+                </div>
+                <div className="w-40 flex items-center gap-2" onWheel={(e) => onVolume((v) => v + (e.deltaY < 0 ? 0.05 : -0.05))}>
+                  <button onClick={() => onVolume((v) => (v > 0 ? 0 : lastVolume.current))} title="Ztlumit" className="text-slate-300 hover:text-cyan-300 transition-colors">
+                    {volume === 0 ? <VolumeX size={18} /> : <Volume2 size={18} />}
+                  </button>
+                  <input
+                    type="range" min={0} max={1} step={0.01} value={volume}
+                    onChange={(e) => onVolume(Number(e.target.value))}
+                    aria-label="Hlasitost"
+                    className="flex-1 accent-cyan-400 cursor-pointer"
+                  />
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
