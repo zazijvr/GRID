@@ -9,7 +9,7 @@ const GALAXY_VERTEX = `
   varying vec3 vColor; varying float vGlow;
   void main(){
     float lv = uLevels[int(aBand)];
-    vGlow = 0.25 + lv * 1.8 + uPulse * 0.6;
+    vGlow = 0.18 + lv * 1.0 + uPulse * 0.3;
     vColor = aColor;
     vec4 mv = modelViewMatrix * vec4(position * (1.0 + lv * 0.08), 1.0);
     gl_PointSize = aSize * (0.8 + lv * 2.4 + uPulse * 0.6) * uPixel * (60.0 / -mv.z);
@@ -79,7 +79,7 @@ export function createGalaxy(): Effect {
   // Rázové vlny na beat (ploché prstence v rovině galaxie)
   const waves = Array.from({ length: 4 }, () => {
     const mat = new THREE.MeshBasicMaterial({ color: 0x00f3ff, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false });
-    const mesh = new THREE.Mesh(new THREE.TorusGeometry(1, 0.02, 6, 160), mat);
+    const mesh = new THREE.Mesh(new THREE.TorusGeometry(1, 0.006, 6, 160), mat); // tloušťka roste se zvětšením – tenký
     mesh.rotation.x = Math.PI / 2;
     galaxy.add(mesh);
     return { mesh, mat, age: 99 };
@@ -94,9 +94,10 @@ export function createGalaxy(): Effect {
   return {
     name: 'Neon Galaxy',
     scene, camera,
-    bloom: { strength: 0.85, radius: 0.45, threshold: 0.15 },
-    bloomStrength: (f) => 0.75 + f.pulse * 0.5,
-    resize: (_w, h) => { uniforms.uPixel.value = Math.max(0.6, h / 700); },
+    bloom: { strength: 0.5, radius: 0.3, threshold: 0.35 },
+    bloomStrength: (f) => 0.45 + f.pulse * 0.25,
+    // Velikost bodů s výškou okna jen mírně – na celé obrazovce by se aditivní záře slila do jedné plochy
+    resize: (_w, h) => { uniforms.uPixel.value = Math.min(1.15, Math.max(0.6, h / 700)); },
     update(f, dt, t) {
       const lv = uniforms.uLevels.value;
       for (let i = 0; i < SPECTRUM_BANDS; i++) lv[i] = levelOf(f, i);
@@ -115,7 +116,7 @@ export function createGalaxy(): Effect {
         w.age += dt;
         const k = Math.min(1, w.age / 1.8);
         w.mesh.scale.setScalar(R_MIN + k * (R_MAX + 8 - R_MIN));
-        w.mat.opacity = (1 - k) * 0.9;
+        w.mat.opacity = (1 - k) * 0.6;
         w.mesh.visible = k < 1;
       }
       logo.update(f);

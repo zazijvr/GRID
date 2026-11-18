@@ -19,8 +19,10 @@ interface VisualizerStudioProps {
   onClose: () => void;
   /** Počítač: panel vlevo od přehrávače (jinak překryv přes celé okno – telefon) */
   docked?: boolean;
-  /** Změna velikosti okna tahem za levý okraj / roh */
-  onResizeStart?: (direction: 'West' | 'SouthWest') => void;
+  /** Změna velikosti okna tahem za okraj / roh */
+  onResizeStart?: (direction: 'West' | 'SouthWest' | 'East' | 'SouthEast') => void;
+  /** Na které straně je okraj okna (visualizer vlevo od přehrávače = 'left', vpravo = 'right') */
+  resizeSide?: 'left' | 'right';
   /** Přesun okna za prázdné místo horní lišty */
   onDragStart?: () => void;
 }
@@ -42,7 +44,7 @@ const readSettings = (): { effect: number; auto: boolean } => {
 
 const formatTime = (s: number) => (Number.isFinite(s) && s > 0 ? `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}` : '0:00');
 
-export function VisualizerStudio({ audioRef, isPlaying, trackName, currentTime, duration, onClose, docked = false, onResizeStart, onDragStart }: VisualizerStudioProps) {
+export function VisualizerStudio({ audioRef, isPlaying, trackName, currentTime, duration, onClose, docked = false, onResizeStart, onDragStart, resizeSide = 'left' }: VisualizerStudioProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const engineRef = useRef<VisualizerEngine | null>(null);
@@ -167,10 +169,21 @@ export function VisualizerStudio({ audioRef, isPlaying, trackName, currentTime, 
   return (
     <div
       ref={containerRef}
-      className={`${docked ? 'relative w-full h-full border-r border-cyan-500/30' : 'absolute inset-0 z-50'} flex items-center justify-center bg-black overflow-hidden ${!isFullscreen && !docked ? 'rounded-3xl border-2 border-cyan-500/20 shadow-[0_0_50px_rgba(0,243,255,0.15)] m-4' : ''} ${hideUi ? 'cursor-none' : ''}`}
+      className={`${docked ? `relative w-full h-full ${resizeSide === 'right' ? 'border-l' : 'border-r'} border-cyan-500/30` : 'absolute inset-0 z-50'} flex items-center justify-center bg-black overflow-hidden ${!isFullscreen && !docked ? 'rounded-3xl border-2 border-cyan-500/20 shadow-[0_0_50px_rgba(0,243,255,0.15)] m-4' : ''} ${hideUi ? 'cursor-none' : ''}`}
     >
       {/* Změna velikosti: levý okraj a levý dolní roh (okno je bez systémového rámečku) */}
-      {docked && !isFullscreen && onResizeStart && (
+      {docked && !isFullscreen && onResizeStart && resizeSide === 'right' && (
+        <div
+          className="absolute right-0 bottom-0 w-6 h-6 z-30 cursor-nwse-resize"
+          onPointerDown={(e) => { if (e.button === 0) onResizeStart('SouthEast'); }}
+          title="Táhnutím změníte velikost"
+        >
+          <svg viewBox="0 0 24 24" className="w-full h-full text-cyan-400/60 hover:text-cyan-300">
+            <path d="M20 10v10H10M20 15l-5 5" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" />
+          </svg>
+        </div>
+      )}
+      {docked && !isFullscreen && onResizeStart && resizeSide === 'left' && (
         <>
           <div
             className="absolute left-0 top-0 bottom-6 w-1.5 z-30 cursor-ew-resize hover:bg-cyan-400/30 transition-colors"

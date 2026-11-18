@@ -26,6 +26,8 @@ const readVizWidth = () => {
   }
 };
 const isTauri = () => !!window.__TAURI_INTERNALS__;
+/** Linux (počítač): okno nejde posunout doleva (Wayland) → pořadí přehrávač | visualizer | ekvalizér */
+const vizOnRight = /Linux/.test(navigator.userAgent) && !isMobile;
 const tauriWindow = () => import('@tauri-apps/api/window').then((m) => m.getCurrentWindow());
 const ACCEPT_AUDIO = 'audio/*,.wav,.mp3,.flac,.ogg,.oga,.opus,.m4a,.aac,.wma,.weba,.webm';
 
@@ -104,12 +106,12 @@ function App() {
 
   const openVisualizer = useCallback(() => {
     setShowVisualizer(true);
-    if (!isMobile) resizeWindow(fixedWidth(showEQ) + vizWidthRef.current, vizWidthRef.current).catch(() => {});
+    if (!isMobile) resizeWindow(fixedWidth(showEQ) + vizWidthRef.current, vizOnRight ? 0 : vizWidthRef.current).catch(() => {});
   }, [showEQ, resizeWindow]);
 
   const closeVisualizer = useCallback(() => {
     setShowVisualizer(false);
-    if (!isMobile) resizeWindow(fixedWidth(showEQ), -vizWidthRef.current).catch(() => {});
+    if (!isMobile) resizeWindow(fixedWidth(showEQ), vizOnRight ? 0 : -vizWidthRef.current).catch(() => {});
   }, [showEQ, resizeWindow]);
 
   // Uživatel zvětšil / zmenšil okno s visualizerem → zapamatovat šířku visualizeru
@@ -131,7 +133,7 @@ function App() {
     return () => { clearTimeout(t); window.removeEventListener('resize', onResize); };
   }, [showVisualizer, showEQ]);
 
-  const startResize = (direction: 'West' | 'SouthWest') => {
+  const startResize = (direction: 'West' | 'SouthWest' | 'East' | 'SouthEast') => {
     if (isTauri()) tauriWindow().then((w) => w.startResizeDragging(direction)).catch(() => {});
   };
 
@@ -175,6 +177,27 @@ function App() {
     if (isTauri()) tauriWindow().then((w) => w.startDragging());
   };
 
+  // Visualizer (počítač): Windows / X11 vlevo od přehrávače (okno se posune doleva),
+  // Linux vpravo – Wayland aplikaci posouvat okno nedovolí, rostlo by jen doprava
+  const visualizerPanel = (
+    <div className="relative flex-1 min-w-0 h-full">
+      <Suspense fallback={null}>
+        <VisualizerStudio
+          docked
+          audioRef={audioRef}
+          isPlaying={isPlaying}
+          trackName={currentTrack?.name ?? null}
+          currentTime={currentTime}
+          duration={duration}
+          onClose={closeVisualizer}
+          onResizeStart={startResize}
+          resizeSide={vizOnRight ? 'right' : 'left'}
+          onDragStart={() => { if (isTauri()) tauriWindow().then((w) => w.startDragging()); }}
+        />
+      </Suspense>
+    </div>
+  );
+
   return (
     // Outer wrapper – flex-row pro player + EQ panel
     <div
@@ -186,24 +209,7 @@ function App() {
       onDragLeave={() => setIsDragging(false)}
       onDrop={handleDrop}
     >
-      {/* ── VISUALIZER vlevo od přehrávače (počítač) ── */}
-      {showVisualizer && !isMobile && (
-        <div className="relative flex-1 min-w-0 h-full">
-          <Suspense fallback={null}>
-            <VisualizerStudio
-              docked
-              audioRef={audioRef}
-              isPlaying={isPlaying}
-              trackName={currentTrack?.name ?? null}
-              currentTime={currentTime}
-              duration={duration}
-              onClose={closeVisualizer}
-              onResizeStart={startResize}
-              onDragStart={() => { if (isTauri()) tauriWindow().then((w) => w.startDragging()); }}
-            />
-          </Suspense>
-        </div>
-      )}
+      {showVisualizer && !isMobile && !vizOnRight && visualizerPanel}
 
       {/* ── PLAYER – fixní šířka aby EQ panel nevytlačil obsah ── */}
       <div className="flex flex-col bg-slate-900/90 overflow-hidden shrink-0" style={{ width: isMobile ? '100%' : PLAYER_WIDTH }}>
@@ -498,6 +504,8 @@ function App() {
         </div>
       </div>
       {/* ── END LEFT COLUMN ── */}
+
+      {showVisualizer && !isMobile && vizOnRight && visualizerPanel}
 
       {/* ── RIGHT COLUMN – EQ SIDE PANEL (telefon: přes přehrávač – vedle by byl mimo obrazovku) ── */}
       {isMobile ? (
