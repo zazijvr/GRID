@@ -23,6 +23,12 @@ html, body {
   height: 100%;
 }
 
+/* Linux: neprůhledné okno – pozadí aplikace místo výchozí bílé (main.tsx) */
+html.opaque-window,
+html.opaque-window body {
+  background-color: var(--color-dark-bg);
+}
+
 /* Custom scrollbar for playlist */
 ::-webkit-scrollbar {
   width: 6px;
