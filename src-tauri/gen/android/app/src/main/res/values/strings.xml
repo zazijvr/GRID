@@ -1,0 +1,9 @@
+<resources>
+    <string name="app_name">GRID</string>
+    <string name="main_activity_title">GRID</string>
+    <string name="playback_channel">Přehrávání</string>
+    <string name="action_play">Přehrát</string>
+    <string name="action_pause">Pauza</string>
+    <string name="action_next">Další</string>
+    <string name="action_prev">Předchozí</string>
+</resources>

@@ -25,3 +25,6 @@ dist-ssr
 
 # Staré pomocné skripty a zálohy (mimo git)
 _stare/
+
+# Sestavené balíčky
+release/

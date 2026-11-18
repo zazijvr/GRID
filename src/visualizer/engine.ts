@@ -89,7 +89,10 @@ export class VisualizerEngine {
     if (q.bloom) this.bloom.resolution.set(Math.max(64, w * pr * q.bloomScale), Math.max(64, h * pr * q.bloomScale));
     if (this.effect) {
       this.effect.resize?.(w, h);
-      this.effect.camera.aspect = w / Math.max(1, h);
+      const aspect = w / Math.max(1, h);
+      this.effect.camera.aspect = aspect;
+      // Efekty jsou navržené na šířku – na výšku (telefon) oddálit, ať se vejdou do šířky obrazovky
+      this.effect.camera.zoom = Math.min(1, aspect / 1.2);
       this.effect.camera.updateProjectionMatrix();
     }
   }

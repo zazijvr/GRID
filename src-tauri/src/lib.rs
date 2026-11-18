@@ -2,13 +2,23 @@
 // přes oprávnění v capabilities/default.json. Jediný příkaz otevře web ZažijVR (pevná adresa –
 // stránka nemůže nechat otevřít nic jiného).
 
+#[cfg(desktop)]
 const WEBSITE: &str = "https://zazijvr.cz";
 
+#[cfg(desktop)]
 #[tauri::command]
 fn open_website() -> Result<(), String> {
     open_external(WEBSITE).map_err(|e| e.to_string())
 }
 
+/// Telefon: odkazy otevírá nativní část (MainActivity.kt)
+#[cfg(mobile)]
+#[tauri::command]
+fn open_website() -> Result<(), String> {
+    Err("open_website: na telefonu otevírá odkaz MainActivity".into())
+}
+
+#[cfg(desktop)]
 /// Otevře adresu v prohlížeči systému. Linux v AppImage: systémový xdg-open s očištěným
 /// prostředím – prohlížeč by jinak zdědil přibalené knihovny AppImage a nespustil se.
 fn open_external(url: &str) -> std::io::Result<()> {

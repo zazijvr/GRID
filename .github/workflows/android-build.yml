@@ -48,7 +48,9 @@ jobs:
 
       - name: Build APK (Release)
         run: |
-          npx tauri android init || true
+          # Android projekt je v gitu (vlastní MainActivity / MediaPlaybackService) – init jen když chybí,
+          # jinak by se vlastní kód přepsal šablonou
+          [ -d src-tauri/gen/android ] || npx tauri android init
           npx tauri android build --apk
 
       - name: Sign Release APK
@@ -61,7 +63,7 @@ jobs:
           # (jiný podpis = Android aktualizaci odmítne, uživatel musí odinstalovat a přijde o playlist).
           if [ -n "$KEYSTORE_B64" ] && [ -n "$KEYSTORE_PASSWORD" ]; then
             echo "$KEYSTORE_B64" | base64 -d > release.jks
-            ALIAS="${KEY_ALIAS:-zazijvr}"
+            ALIAS="${KEY_ALIAS:-zvrgrid}"
           else
             echo "::warning::Chybí secrets ANDROID_KEYSTORE_BASE64 / ANDROID_KEYSTORE_PASSWORD – APK je podepsané DOČASNÝM klíčem a nepůjde nainstalovat jako aktualizace."
             KEYSTORE_PASSWORD="$(openssl rand -hex 16)"

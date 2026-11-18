@@ -4,6 +4,7 @@ import {
 } from 'lucide-react';
 import { useAudioPlayer } from './hooks/useAudioPlayer';
 import { closeAudioGraph } from './audio/audioGraph';
+import { isAndroidApp, openWebsiteAndroid, postPlaybackState, setImmersive } from './platform/android';
 import { SpectrumVisualizer } from './components/SpectrumVisualizer';
 // three.js je velký – načte se až při otevření Visualizer Studia (rychlejší start přehrávače)
 const VisualizerStudio = lazy(() => import('./components/VisualizerStudio').then((m) => ({ default: m.VisualizerStudio })));
@@ -103,6 +104,7 @@ function App() {
   // Celá obrazovka: celé okno přes monitor, visualizer přes celé okno (přehrávač a EQ pod ním)
   const setFullscreen = useCallback(async (on: boolean) => {
     setVizFullscreen(on);
+    if (isMobile) setImmersive(on); // telefon: visualizer už je přes celé okno – schovat systémové lišty
     if (isTauri() && !isMobile) {
       try {
         const w = await tauriWindow();
@@ -129,6 +131,57 @@ function App() {
     setShowVisualizer(false);
     if (!isMobile) resizeWindow(fixedWidth(showEQ), vizOnRight ? 0 : -VIZ_WIDTH).catch(() => {});
   }, [showEQ, resizeWindow, vizFullscreen, setFullscreen]);
+
+  // ── Android: oznámení / zamykací obrazovka / sluchátka a tlačítko Zpět ──
+  // Stav přehrávání do nativní části (při změně a během hraní každých ~5 s kvůli pozici)
+  const stateTick = isPlaying ? Math.floor(currentTime / 5) : -1;
+  useEffect(() => {
+    if (!isAndroidApp()) return;
+    postPlaybackState({
+      playing: isPlaying,
+      title: currentTrack?.name ?? '',
+      positionMs: currentTime * 1000,
+      durationMs: duration * 1000,
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- currentTime jen přes stateTick (ne každý snímek)
+  }, [isPlaying, currentTrack?.id, duration, stateTick]);
+
+  // Povely z nativní části – vždy na aktuální funkce (ref), handler se registruje jednou
+  const mediaRef = useRef({ togglePlay, nextTrack, prevTrack, seek });
+  mediaRef.current = { togglePlay, nextTrack, prevTrack, seek };
+  const backRef = useRef<() => boolean>(() => false);
+  backRef.current = () => {
+    if (showVisualizer) {
+      closeVisualizer();
+      return true;
+    }
+    if (showEQ) {
+      toggleEQ();
+      return true;
+    }
+    return false;
+  };
+  useEffect(() => {
+    if (!isAndroidApp()) return;
+    window.__gridMedia = (command: string) => {
+      const m = mediaRef.current;
+      const paused = audioRef.current?.paused ?? true;
+      if (command === 'play') { if (paused) m.togglePlay(); }
+      else if (command === 'pause') { if (!paused) m.togglePlay(); }
+      else if (command === 'toggle') m.togglePlay();
+      else if (command === 'next') m.nextTrack();
+      else if (command === 'prev') m.prevTrack();
+      else if (command.startsWith('seek:')) {
+        const ms = Number(command.slice(5));
+        if (Number.isFinite(ms) && ms >= 0) m.seek(ms / 1000);
+      }
+    };
+    window.__gridBack = () => backRef.current();
+    return () => {
+      delete window.__gridMedia;
+      delete window.__gridBack;
+    };
+  }, [audioRef]);
 
   const formatTime = (time: number) => {
     if (isNaN(time) || !isFinite(time)) return '0:00';
@@ -162,7 +215,8 @@ function App() {
 
   // Logo v titulku → web ZažijVR (v aplikaci přes Rust – jen tahle pevná adresa)
   const openWebsite = () => {
-    if (isTauri()) import('@tauri-apps/api/core').then(({ invoke }) => invoke('open_website')).catch((e) => console.warn('Web se nepodařilo otevřít', e));
+    if (isAndroidApp()) openWebsiteAndroid();
+    else if (isTauri()) import('@tauri-apps/api/core').then(({ invoke }) => invoke('open_website')).catch((e) => console.warn('Web se nepodařilo otevřít', e));
     else window.open('https://zazijvr.cz', '_blank', 'noopener');
   };
 
@@ -214,6 +268,8 @@ function App() {
         ${!isMobile ? 'border border-cyan-500/30 rounded-lg shadow-2xl' : ''}
         ${isDragging ? 'border-pink-500/80 shadow-[0_0_20px_rgba(248,0,255,0.4)]' : ''}
       `}
+      // Telefon: obsah mimo systémové lišty (aplikace kreslí edge-to-edge)
+      style={isMobile ? { paddingTop: 'env(safe-area-inset-top, 0px)', paddingBottom: 'env(safe-area-inset-bottom, 0px)' } : undefined}
       onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
       onDragLeave={() => setIsDragging(false)}
       onDrop={handleDrop}
@@ -259,6 +315,15 @@ function App() {
                 <X size={14} />
               </button>
             </div>
+          </div>
+        )}
+
+        {/* Telefon: titulek okna není – logo s odkazem na zazijvr.cz nahoře */}
+        {isMobile && (
+          <div className="shrink-0 flex justify-center pt-3 pb-1">
+            <button type="button" onClick={openWebsite} aria-label="Otevřít web ZažijVR" className="active:scale-95 transition-transform">
+              <img src="/logo.png" alt="Zažij VR" className="grid-neon-logo h-7 object-contain" draggable={false} />
+            </button>
           </div>
         )}
 
@@ -548,12 +613,14 @@ function App() {
             currentTime={currentTime}
             duration={duration}
             onClose={closeVisualizer}
-          volume={volume}
-          onTogglePlay={togglePlay}
-          onNext={nextTrack}
-          onPrev={prevTrack}
-          onSeek={seek}
-          onVolume={setVolume}
+            volume={volume}
+            onTogglePlay={togglePlay}
+            onNext={nextTrack}
+            onPrev={prevTrack}
+            onSeek={seek}
+            onVolume={setVolume}
+            fullscreen={vizFullscreen}
+            onFullscreen={isAndroidApp() ? setFullscreen : undefined}
           />
         </Suspense>
       )}
