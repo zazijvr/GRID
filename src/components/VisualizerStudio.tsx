@@ -3,11 +3,10 @@ import { X, Maximize, Minimize, ChevronLeft, ChevronRight, Shuffle } from 'lucid
 import { getAudioGraph } from '../audio/audioGraph';
 import { AudioAnalyzer } from '../visualizer/audioFeatures';
 import { VisualizerEngine, type Effect } from '../visualizer/engine';
-import { createPortal } from '../visualizer/effects/portal';
 import { createRing } from '../visualizer/effects/ring';
-import { createSynthwave } from '../visualizer/effects/synthwave';
-import { createSphere } from '../visualizer/effects/sphere';
-import { createMountains } from '../visualizer/effects/mountains';
+import { createWave } from '../visualizer/effects/wave';
+import { createEqualizer } from '../visualizer/effects/equalizer';
+import { createHex } from '../visualizer/effects/hex';
 
 interface VisualizerStudioProps {
   audioRef: React.RefObject<HTMLAudioElement | null>;
@@ -18,8 +17,8 @@ interface VisualizerStudioProps {
   onClose: () => void;
 }
 
-const EFFECTS: Array<() => Effect> = [createPortal, createRing, createSynthwave, createSphere, createMountains];
-const EFFECT_NAMES = ['Hyperspace Portal', 'Neon Ring', 'Synthwave', 'Cyber Sphere', 'Audio Mountains'];
+const EFFECTS: Array<() => Effect> = [createRing, createWave, createEqualizer, createHex];
+const EFFECT_NAMES = ['Neon Ring', 'Neon Wave', 'Neon Equalizer', 'Neon Hex'];
 const AUTO_CYCLE_S = 40;
 const SETTINGS_KEY = 'zvr-grid-visualizer';
 

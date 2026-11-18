@@ -2,6 +2,7 @@
 // a detekce beatu. Hodnoty 0–1, nezávislé na snímkové frekvenci.
 
 export const SPECTRUM_BANDS = 64;
+export const WAVE_POINTS = 256;
 
 export interface AudioFeatures {
   bass: number;
@@ -16,6 +17,8 @@ export interface AudioFeatures {
   pulse: number;
   /** Vyhlazené spektrum, SPECTRUM_BANDS pásem 30 Hz – 16 kHz (logaritmicky) */
   spectrum: Float32Array;
+  /** Průběh vlny (osciloskop), WAVE_POINTS hodnot −1…1, vyhlazený */
+  waveform: Float32Array;
   /** Hraje hudba (jinak je všechno 0) */
   playing: boolean;
 }
@@ -30,9 +33,10 @@ const smooth = (prev: number, next: number, dt: number, attack = 18, release = 5
 export class AudioAnalyzer {
   readonly features: AudioFeatures = {
     bass: 0, lowMid: 0, mid: 0, high: 0, energy: 0, beat: false, pulse: 0,
-    spectrum: new Float32Array(SPECTRUM_BANDS), playing: false,
+    spectrum: new Float32Array(SPECTRUM_BANDS), waveform: new Float32Array(WAVE_POINTS), playing: false,
   };
   private data: Uint8Array<ArrayBuffer> | null = null;
+  private time: Uint8Array<ArrayBuffer> | null = null;
   private edges: number[] = [];
   private binHz = 0;
   // Detekce beatu: energie basů proti klouzavému průměru
@@ -50,6 +54,7 @@ export class AudioAnalyzer {
       f.bass = smooth(f.bass, 0, dt); f.lowMid = smooth(f.lowMid, 0, dt);
       f.mid = smooth(f.mid, 0, dt); f.high = smooth(f.high, 0, dt); f.energy = smooth(f.energy, 0, dt);
       for (let i = 0; i < SPECTRUM_BANDS; i++) f.spectrum[i] = smooth(f.spectrum[i], 0, dt);
+      for (let i = 0; i < WAVE_POINTS; i++) f.waveform[i] = smooth(f.waveform[i], 0, dt);
       return;
     }
 
@@ -62,6 +67,17 @@ export class AudioAnalyzer {
     }
     const data = this.data;
     analyser.getByteFrequencyData(data);
+    if (!this.time || this.time.length !== analyser.fftSize) this.time = new Uint8Array(analyser.fftSize);
+    analyser.getByteTimeDomainData(this.time);
+    // Vlna: začít v průchodu nulou nahoru (obraz „stojí“, neposkakuje), pak převzorkovat
+    const td = this.time;
+    let start = 0;
+    for (let i = 1; i < td.length / 2; i++) if (td[i - 1] < 128 && td[i] >= 128) { start = i; break; }
+    const span = Math.min(td.length - start, 1024);
+    for (let i = 0; i < WAVE_POINTS; i++) {
+      const v = (td[start + Math.floor((i / WAVE_POINTS) * span)] - 128) / 128;
+      f.waveform[i] += (v - f.waveform[i]) * Math.min(1, dt * 30);
+    }
 
     const band = (lo: number, hi: number) => {
       const a = Math.max(0, Math.floor(lo / this.binHz));

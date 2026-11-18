@@ -16,6 +16,8 @@ export interface Effect {
   update(f: AudioFeatures, dt: number, t: number): void;
   /** Síla záře v tomto snímku (např. silnější na beat); jinak bloom.strength */
   bloomStrength?(f: AudioFeatures): number;
+  /** Změna velikosti plátna (silné čáry Line2 potřebují rozlišení) */
+  resize?(width: number, height: number): void;
   dispose?(): void;
 }
 
@@ -87,6 +89,7 @@ export class VisualizerEngine {
     const q = QUALITY[this.quality];
     if (q.bloom) this.bloom.resolution.set(Math.max(64, w * q.bloomScale), Math.max(64, h * q.bloomScale));
     if (this.effect) {
+      this.effect.resize?.(w, h);
       this.effect.camera.aspect = w / Math.max(1, h);
       this.effect.camera.updateProjectionMatrix();
     }
