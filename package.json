@@ -8,7 +8,7 @@
     "build": "tsc && vite build",
     "preview": "vite preview",
     "tauri": "tauri",
-    "dev:linux": "GDK_BACKEND=x11 WEBKIT_DISABLE_DMABUF_RENDERER=1 bun run tauri dev"
+    "dev:linux": "WEBKIT_DISABLE_DMABUF_RENDERER=1 bun run tauri dev"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.12.5",
