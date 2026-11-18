@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { X, Maximize, Minimize, ChevronLeft, ChevronRight, Shuffle, Play, Pause, SkipBack, SkipForward, Volume2, VolumeX } from 'lucide-react';
 import { getAudioGraph } from '../audio/audioGraph';
+import { startDrag } from '../utils/drag';
 import { AudioAnalyzer } from '../visualizer/audioFeatures';
 import { VisualizerEngine, type Effect } from '../visualizer/engine';
 import { createRing } from '../visualizer/effects/ring';
@@ -258,19 +259,12 @@ export function VisualizerStudio({ audioRef, isPlaying, trackName, currentTime, 
                 if (duration <= 0) return;
                 const rect = e.currentTarget.getBoundingClientRect();
                 const at = (x: number) => Math.max(0, Math.min(1, (x - rect.left) / rect.width)) * duration;
-                const el = e.currentTarget;
-                el.setPointerCapture(e.pointerId);
-                setScrub(at(e.clientX));
-                const move = (me: PointerEvent) => setScrub(at(me.clientX));
-                const up = (ue: PointerEvent) => {
-                  el.removeEventListener('pointermove', move);
-                  el.removeEventListener('pointerup', up);
-                  onSeek(at(ue.clientX));
+                startDrag(e, (x) => setScrub(at(x)), (x, _y, cancelled) => {
+                  if (!cancelled) onSeek(at(x));
                   setScrub(null);
-                };
-                el.addEventListener('pointermove', move);
-                el.addEventListener('pointerup', up);
+                });
               } : undefined}
+              style={showControls ? { touchAction: 'none' } : undefined}
             >
               <div className={`rounded-full bg-white/10 overflow-hidden transition-all ${showControls ? 'h-1.5 group-hover:h-2.5' : 'h-1'}`}>
                 <div

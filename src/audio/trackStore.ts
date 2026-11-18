@@ -148,8 +148,24 @@ export async function clearBlobs() {
   }
 }
 
-/** Soubor → data: URL. GStreamer ve WebKitGTK (Linux) zadrhává u blob: URL (range požadavky);
- *  data: URL se načte celá najednou. */
+/**
+ * Adresa souboru pro <audio>:
+ *  - WebKitGTK (Linux): data: URL – GStreamer zadrhává u blob: URL (range požadavky), data: se načte celá;
+ *  - Chromium (Android WebView, Windows WebView2): blob: URL – Chromium nepřijme adresu delší než 2 MB,
+ *    takže data: URL běžné skladby (5–15 MB) by vůbec nezahrála.
+ */
+export const usesDataUrl = !/Chrome|Chromium|Edg\//.test(navigator.userAgent);
+
+export function playableUrl(blob: Blob): Promise<string> {
+  return usesDataUrl ? blobToDataUrl(blob) : Promise.resolve(URL.createObjectURL(blob));
+}
+
+/** Uvolní adresu z playableUrl (blob: URL drží soubor v paměti, dokud se neuvolní) */
+export function releaseUrl(url: Promise<string>) {
+  url.then((u) => { if (u.startsWith('blob:')) URL.revokeObjectURL(u); }).catch(() => {});
+}
+
+/** Soubor → data: URL (celý soubor v adrese) */
 export function blobToDataUrl(blob: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();

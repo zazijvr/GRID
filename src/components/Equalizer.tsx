@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { startDrag } from '../utils/drag';
 import { EQ_BANDS, setEqGains } from '../audio/audioGraph';
 
 // 10-pásmový ekvalizér – filtry jsou v audioGraph.ts, tady jen ovládání
@@ -101,24 +102,13 @@ export function Equalizer({ audioRef, isOpen, onClose, onPresetChange }: Equaliz
   // Drag handling pro slider
   const handleSliderPointerDown = (e: React.PointerEvent<HTMLDivElement>, index: number) => {
     e.preventDefault();
-    e.currentTarget.setPointerCapture(e.pointerId);
     setDragging(index);
-
     const rect = e.currentTarget.getBoundingClientRect();
     const compute = (clientY: number) => {
       const ratio = 1 - Math.max(0, Math.min(1, (clientY - rect.top) / rect.height));
       return ratio * 2 * MAX_GAIN - MAX_GAIN;
     };
-    setGain(index, compute(e.clientY));
-
-    const onMove = (me: PointerEvent) => setGain(index, compute(me.clientY));
-    const onUp   = () => {
-      setDragging(null);
-      window.removeEventListener('pointermove', onMove);
-      window.removeEventListener('pointerup', onUp);
-    };
-    window.addEventListener('pointermove', onMove);
-    window.addEventListener('pointerup', onUp);
+    startDrag(e, (_x, y) => setGain(index, compute(y)), () => setDragging(null));
   };
 
   const resetAll = () => selectPreset('flat');

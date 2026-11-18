@@ -4,6 +4,7 @@ import {
 } from 'lucide-react';
 import { useAudioPlayer } from './hooks/useAudioPlayer';
 import { closeAudioGraph } from './audio/audioGraph';
+import { startDrag } from './utils/drag';
 import { isAndroidApp, openWebsiteAndroid, postPlaybackState, setImmersive } from './platform/android';
 import { SpectrumVisualizer } from './components/SpectrumVisualizer';
 // three.js je velký – načte se až při otevření Visualizer Studia (rychlejší start přehrávače)
@@ -366,6 +367,7 @@ function App() {
             <span className="font-medium drop-shadow-sm text-cyan-400/80">{formatTime(currentTime)}</span>
             <div
               className="flex-1 py-4 cursor-none relative group flex items-center"
+              style={{ touchAction: 'none' }}
               onPointerMove={(e) => {
                 const rect = e.currentTarget.getBoundingClientRect();
                 setHoverProgress(Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width)));
@@ -374,18 +376,15 @@ function App() {
               onPointerDown={(e) => {
                 if (duration === 0) return;
                 const rect = e.currentTarget.getBoundingClientRect();
-                const handleMove = (me: PointerEvent) => {
-                  setScrubbingTime(Math.max(0, Math.min(1, (me.clientX - rect.left) / rect.width)) * duration);
-                };
-                const handleUp = (ue: PointerEvent) => {
-                  window.removeEventListener('pointermove', handleMove);
-                  window.removeEventListener('pointerup', handleUp);
-                  seek(Math.max(0, Math.min(1, (ue.clientX - rect.left) / rect.width)) * duration);
-                  setScrubbingTime(null);
-                };
-                window.addEventListener('pointermove', handleMove);
-                window.addEventListener('pointerup', handleUp);
-                setScrubbingTime(Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width)) * duration);
+                const at = (x: number) => Math.max(0, Math.min(1, (x - rect.left) / rect.width)) * duration;
+                startDrag(
+                  e,
+                  (x) => setScrubbingTime(at(x)),
+                  (x, _y, cancelled) => {
+                    if (!cancelled) seek(at(x)); // zrušené gesto skladbou nehýbe
+                    setScrubbingTime(null);
+                  },
+                );
               }}
             >
               <div className="w-full h-2 bg-slate-950/80 rounded-full relative border border-white/5 pointer-events-none">
@@ -486,6 +485,7 @@ function App() {
             </button>
             <div
               className="flex-1 py-3 cursor-none relative group flex items-center"
+              style={{ touchAction: 'none' }}
               onPointerMove={(e) => {
                 const rect = e.currentTarget.getBoundingClientRect();
                 setHoverVolume(Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width)));
@@ -493,14 +493,7 @@ function App() {
               onPointerLeave={() => setHoverVolume(null)}
               onPointerDown={(e) => {
                 const rect = e.currentTarget.getBoundingClientRect();
-                const handleMove = (me: PointerEvent) => setVolume(Math.max(0, Math.min(1, (me.clientX - rect.left) / rect.width)));
-                const handleUp = () => {
-                  window.removeEventListener('pointermove', handleMove);
-                  window.removeEventListener('pointerup', handleUp);
-                };
-                window.addEventListener('pointermove', handleMove);
-                window.addEventListener('pointerup', handleUp);
-                setVolume(Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width)));
+                startDrag(e, (x) => setVolume(Math.max(0, Math.min(1, (x - rect.left) / rect.width))));
               }}
             >
               <div className="w-full h-1.5 bg-slate-900 rounded-full border border-white/5 pointer-events-none relative">

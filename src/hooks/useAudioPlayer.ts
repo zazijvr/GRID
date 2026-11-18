@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { ensureAudioGraph, fadeOut, getAudioGraph, muteNow, restoreVolume, setGraphVolume, waitForDrain } from '../audio/audioGraph';
 import {
-  blobToDataUrl, clearBlobs, deleteBlobs, getBlob, loadPlaylist, putBlobs, saveOrder, type TrackMeta,
+  clearBlobs, deleteBlobs, getBlob, loadPlaylist, playableUrl, putBlobs, releaseUrl, saveOrder, type TrackMeta,
 } from '../audio/trackStore';
 
 export type Track = TrackMeta;
@@ -110,7 +110,7 @@ export function useAudioPlayer() {
       p = (async () => {
         const blob = sessionFiles.current.get(id) ?? (await getBlob(id));
         if (!blob) throw new Error('Soubor skladby chybí');
-        return blobToDataUrl(blob);
+        return playableUrl(blob);
       })();
       p.catch(() => cache.delete(id));
       cache.set(id, p);
@@ -130,7 +130,12 @@ export function useAudioPlayer() {
         setTimeout(() => { trackUrl(list[next].id).catch(() => {}); }, 1500);
       }
     }
-    for (const id of urlCache.current.keys()) if (!keep.has(id)) urlCache.current.delete(id);
+    for (const [id, url] of urlCache.current) {
+      if (!keep.has(id)) {
+        releaseUrl(url);
+        urlCache.current.delete(id);
+      }
+    }
   }, [trackUrl]);
 
   /** Načte skladbu a (volitelně) spustí. Bezpečné při rychlém přeskakování. */
@@ -271,6 +276,7 @@ export function useAudioPlayer() {
     if (!files.some(isAudioFile)) return;
     stopAudio();
     sessionFiles.current.clear();
+    urlCache.current.forEach(releaseUrl);
     urlCache.current.clear();
     await clearBlobs();
     const added = await importFiles(files);
