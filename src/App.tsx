@@ -1,4 +1,4 @@
-import React, { useRef, useState, useCallback, lazy, Suspense } from 'react';
+import React, { useRef, useState, useCallback, useEffect, lazy, Suspense } from 'react';
 import { 
   Play, Pause, SkipForward, SkipBack, Shuffle, Repeat, Repeat1, FolderPlus, FolderOpen, Trash2, Volume2, VolumeX, Minimize2, X, MonitorPlay 
 } from 'lucide-react';
@@ -14,6 +14,17 @@ const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/
 
 const PLAYER_WIDTH  = 350; // px – šířka přehrávače
 const EQ_PANEL_WIDTH = 280; // px – šířka EQ panelu
+const VIZ_DEFAULT_WIDTH = 640; // px – visualizer vlevo od přehrávače (počítač)
+const VIZ_MIN_WIDTH = 320;
+const VIZ_WIDTH_KEY = 'zvr-grid-viz-width';
+const readVizWidth = () => {
+  try {
+    const v = Number(localStorage.getItem(VIZ_WIDTH_KEY));
+    return Number.isFinite(v) && v >= VIZ_MIN_WIDTH && v <= 8000 ? v : VIZ_DEFAULT_WIDTH;
+  } catch {
+    return VIZ_DEFAULT_WIDTH;
+  }
+};
 const isTauri = () => !!window.__TAURI_INTERNALS__;
 const tauriWindow = () => import('@tauri-apps/api/window').then((m) => m.getCurrentWindow());
 const ACCEPT_AUDIO = 'audio/*,.wav,.mp3,.flac,.ogg,.oga,.opus,.m4a,.aac,.wma,.weba,.webm';
@@ -56,29 +67,73 @@ function App() {
   const [hoverProgress, setHoverProgress] = useState<number | null>(null);
   const [hoverVolume,   setHoverVolume]   = useState<number | null>(null);
 
-  // EQ panel toggle – otevření: nejdřív rozšíř okno, pak zobraz panel
-  //                  zavření:  nejdřív skryj panel, pak po animaci zmenši okno
-  // Mění jen šířku – výšku, kterou si uživatel nastavil, nechá
-  const resizeWindow = useCallback(async (width: number) => {
+  // Šířka okna = [visualizer] + přehrávač + [ekvalizér]. Výšku, kterou si uživatel nastavil, nechá.
+  // shiftLeft: o kolik posunout okno doleva (visualizer roste vlevo, přehrávač zůstane na místě) –
+  // na Waylandu aplikace polohu okna měnit nesmí, tam okno jen poroste doprava.
+  const vizWidthRef = useRef(readVizWidth());
+  const programmaticResize = useRef(0);
+  const resizeWindow = useCallback(async (width: number, shiftLeft = 0) => {
     if (!isTauri() || isMobile) return;
-    const [win, { LogicalSize }] = await Promise.all([tauriWindow(), import('@tauri-apps/api/dpi')]);
+    programmaticResize.current = Date.now();
+    const [win, { LogicalSize, LogicalPosition }] = await Promise.all([tauriWindow(), import('@tauri-apps/api/dpi')]);
     const [size, scale] = await Promise.all([win.innerSize(), win.scaleFactor()]);
+    if (shiftLeft) {
+      try {
+        const pos = await win.outerPosition();
+        if (pos.x !== 0 || pos.y !== 0) await win.setPosition(new LogicalPosition(Math.max(0, pos.x / scale - shiftLeft), pos.y / scale));
+      } catch { /* poloha okna není k dispozici (Wayland) */ }
+    }
     await win.setSize(new LogicalSize(width, size.height / scale));
   }, []);
+  const fixedWidth = (eq: boolean) => PLAYER_WIDTH + (eq ? EQ_PANEL_WIDTH : 0);
 
   const toggleEQ = useCallback(() => {
     const next = !showEQ;
+    const viz = showVisualizer && !isMobile ? vizWidthRef.current : 0;
     if (next) {
       // Otevřít: nejdřív rozšiř okno → pak zobraz panel
-      resizeWindow(PLAYER_WIDTH + EQ_PANEL_WIDTH)
+      resizeWindow(fixedWidth(true) + viz)
         .then(() => setShowEQ(true))
         .catch(() => setShowEQ(true)); // fallback i bez Tauri (browser preview)
     } else {
       // Zavřít: skryj panel a zmenši okno
       setShowEQ(false);
-      resizeWindow(PLAYER_WIDTH);
+      resizeWindow(fixedWidth(false) + viz);
     }
+  }, [showEQ, showVisualizer, resizeWindow]);
+
+  const openVisualizer = useCallback(() => {
+    setShowVisualizer(true);
+    if (!isMobile) resizeWindow(fixedWidth(showEQ) + vizWidthRef.current, vizWidthRef.current).catch(() => {});
   }, [showEQ, resizeWindow]);
+
+  const closeVisualizer = useCallback(() => {
+    setShowVisualizer(false);
+    if (!isMobile) resizeWindow(fixedWidth(showEQ), -vizWidthRef.current).catch(() => {});
+  }, [showEQ, resizeWindow]);
+
+  // Uživatel zvětšil / zmenšil okno s visualizerem → zapamatovat šířku visualizeru
+  useEffect(() => {
+    if (!showVisualizer || isMobile) return;
+    let t = 0;
+    const onResize = () => {
+      clearTimeout(t);
+      t = window.setTimeout(() => {
+        if (Date.now() - programmaticResize.current < 800) return; // naše vlastní změna velikosti
+        const w = window.innerWidth - fixedWidth(showEQ);
+        if (w >= VIZ_MIN_WIDTH) {
+          vizWidthRef.current = w;
+          try { localStorage.setItem(VIZ_WIDTH_KEY, String(Math.round(w))); } catch { /* jen se nezapamatuje */ }
+        }
+      }, 300);
+    };
+    window.addEventListener('resize', onResize);
+    return () => { clearTimeout(t); window.removeEventListener('resize', onResize); };
+  }, [showVisualizer, showEQ]);
+
+  const startResize = (direction: 'West' | 'SouthWest') => {
+    if (isTauri()) tauriWindow().then((w) => w.startResizeDragging(direction)).catch(() => {});
+  };
 
   const formatTime = (time: number) => {
     if (isNaN(time) || !isFinite(time)) return '0:00';
@@ -131,7 +186,26 @@ function App() {
       onDragLeave={() => setIsDragging(false)}
       onDrop={handleDrop}
     >
-      {/* ── LEFT COLUMN – PLAYER – fixní šířka aby EQ panel nevytlačil obsah ── */}
+      {/* ── VISUALIZER vlevo od přehrávače (počítač) ── */}
+      {showVisualizer && !isMobile && (
+        <div className="relative flex-1 min-w-0 h-full">
+          <Suspense fallback={null}>
+            <VisualizerStudio
+              docked
+              audioRef={audioRef}
+              isPlaying={isPlaying}
+              trackName={currentTrack?.name ?? null}
+              currentTime={currentTime}
+              duration={duration}
+              onClose={closeVisualizer}
+              onResizeStart={startResize}
+              onDragStart={() => { if (isTauri()) tauriWindow().then((w) => w.startDragging()); }}
+            />
+          </Suspense>
+        </div>
+      )}
+
+      {/* ── PLAYER – fixní šířka aby EQ panel nevytlačil obsah ── */}
       <div className="flex flex-col bg-slate-900/90 overflow-hidden shrink-0" style={{ width: isMobile ? '100%' : PLAYER_WIDTH }}>
 
         {/* Title Bar */}
@@ -149,9 +223,9 @@ function App() {
               <EQButton active={showEQ} onClick={toggleEQ} preset={activePreset} />
 
               <button
-                onClick={() => setShowVisualizer(true)}
+                onClick={showVisualizer ? closeVisualizer : openVisualizer}
                 title="Visualizer Studio"
-                className="text-slate-400 hover:text-cyan-400 transition-colors p-1"
+                className={`transition-colors p-1 ${showVisualizer ? 'text-cyan-400' : 'text-slate-400 hover:text-cyan-400'}`}
               >
                 <MonitorPlay size={14} />
               </button>
@@ -296,7 +370,7 @@ function App() {
               )}
               {isMobile && (
                 <button
-                  onClick={() => setShowVisualizer(true)}
+                  onClick={openVisualizer}
                   title="Visualizer Studio"
                   className="p-2 transition-all duration-300 rounded-full text-slate-500 hover:text-cyan-400 hover:bg-cyan-400/10 hover:shadow-[0_0_15px_rgba(0,243,255,0.4)]"
                 >
@@ -439,8 +513,8 @@ function App() {
 
       <audio ref={audioRef} preload="auto" className="hidden" />
 
-      {/* Visualizer Studio Overlay */}
-      {showVisualizer && (
+      {/* Visualizer Studio – telefon: přes celou obrazovku */}
+      {showVisualizer && isMobile && (
         <Suspense fallback={null}>
           <VisualizerStudio
             audioRef={audioRef}
@@ -448,7 +522,7 @@ function App() {
             trackName={currentTrack?.name ?? null}
             currentTime={currentTime}
             duration={duration}
-            onClose={() => setShowVisualizer(false)}
+            onClose={closeVisualizer}
           />
         </Suspense>
       )}

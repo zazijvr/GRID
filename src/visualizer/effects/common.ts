@@ -6,8 +6,9 @@ import type { AudioFeatures } from '../audioFeatures';
 
 // Společné prvky neonových efektů: logo ZažijVR, jiskry na beat, silné neonové čáry.
 
-/** Logo uprostřed: tmavý kruh pod ním (kontrast) a mírně ztlumené, aby svítilo, ale šlo přečíst */
-export function createLogo(scene: THREE.Scene, width = 18, y = 0) {
+/** Logo uprostřed: tmavý kruh pod ním (kontrast) a mírně ztlumené, aby svítilo, ale šlo přečíst.
+ *  faceCamera: kruh se natáčí ke kameře (kamera se dívá šikmo, logo je sprite – vždy čelem) */
+export function createLogo(scene: THREE.Scene, width = 18, y = 0, faceCamera?: THREE.Camera) {
   const backing = new THREE.Mesh(
     new THREE.CircleGeometry(width * 0.62, 64),
     new THREE.ShaderMaterial({
@@ -35,6 +36,7 @@ export function createLogo(scene: THREE.Scene, width = 18, y = 0) {
       const s = 1 + f.bass * 0.06 + f.pulse * 0.05;
       sprite.scale.set(width * s, width * aspect * s, 1);
       backing.scale.setScalar(s);
+      if (faceCamera) backing.quaternion.copy(faceCamera.quaternion);
       const b = 0.6 + f.pulse * 0.12; // na beat jen lehce zjasní
       mat.color.setRGB(b, b, b);
     },

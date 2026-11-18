@@ -40,7 +40,9 @@ export function ensureAudioGraph(audio: HTMLMediaElement): AudioGraph | null {
       window.AudioContext ?? (window as unknown as { webkitAudioContext?: AudioContextCtor }).webkitAudioContext;
     if (!Ctor) return null; // bez Web Audio hraje element sám (bez EQ a vizualizace)
 
-    const ctx = new Ctor({ latencyHint: 'playback' });
+    // 'interactive' = malá vyrovnávací paměť výstupu: pauza / přeskočení je slyšet hned.
+    // ('playback' na Linuxu držel přes sekundu zvuku – po pauze ještě dohrával.)
+    const ctx = new Ctor({ latencyHint: 'interactive' });
     const source = ctx.createMediaElementSource(audio);
 
     const filters = EQ_BANDS.map((freq, i) => {

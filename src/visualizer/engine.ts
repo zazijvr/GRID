@@ -21,13 +21,14 @@ export interface Effect {
   dispose?(): void;
 }
 
-/** Úrovně kvality – při nízkých FPS se postupně snižují */
+/** Úrovně kvality – při nízkých FPS se postupně snižují. maxPixels = strop vnitřního rozlišení:
+ *  na celé obrazovce (ultrawide 5120 × 1440 = 7,4 Mpx) by se jinak počítal každý pixel. */
 const QUALITY = [
-  { pixelRatio: 2, bloom: true, bloomScale: 0.5 },
-  { pixelRatio: 1.25, bloom: true, bloomScale: 0.5 },
-  { pixelRatio: 1, bloom: true, bloomScale: 0.35 },
-  { pixelRatio: 1, bloom: false, bloomScale: 0 },
-  { pixelRatio: 0.75, bloom: false, bloomScale: 0 },
+  { maxPixels: 1.4e6, bloom: true, bloomScale: 0.5 },
+  { maxPixels: 0.9e6, bloom: true, bloomScale: 0.5 },
+  { maxPixels: 0.6e6, bloom: true, bloomScale: 0.4 },
+  { maxPixels: 0.6e6, bloom: false, bloomScale: 0 },
+  { maxPixels: 0.35e6, bloom: false, bloomScale: 0 },
 ];
 
 export class VisualizerEngine {
@@ -48,8 +49,6 @@ export class VisualizerEngine {
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: false, alpha: false, powerPreference: 'high-performance' });
     this.renderer.toneMapping = THREE.NoToneMapping; // sytý neon (tone mapping by barvy vybledil)
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
-    // Na 4K kiosku stačí menší vnitřní rozlišení
-    this.quality = window.devicePixelRatio > 1.5 ? 0 : 1;
 
     this.composer = new EffectComposer(this.renderer);
     this.renderPass = new RenderPass(new THREE.Scene(), new THREE.PerspectiveCamera());
@@ -73,21 +72,21 @@ export class VisualizerEngine {
   }
 
   private applyQuality() {
-    const q = QUALITY[this.quality];
-    const pr = Math.min(window.devicePixelRatio || 1, q.pixelRatio);
-    this.renderer.setPixelRatio(pr);
-    this.composer.setPixelRatio(pr);
-    this.bloom.enabled = q.bloom;
-    this.width = 0;
+    this.bloom.enabled = QUALITY[this.quality].bloom;
+    this.width = 0; // přepočítat rozlišení
   }
 
   private resize(w: number, h: number) {
     this.width = w;
     this.height = h;
+    const q = QUALITY[this.quality];
+    // Poměr pixelů: ostré na malém okně, na velké obrazovce strop maxPixels (obraz se jen roztáhne)
+    const pr = Math.min(window.devicePixelRatio || 1, Math.sqrt(q.maxPixels / Math.max(1, w * h)));
+    this.renderer.setPixelRatio(pr);
+    this.composer.setPixelRatio(pr);
     this.renderer.setSize(w, h, false);
     this.composer.setSize(w, h);
-    const q = QUALITY[this.quality];
-    if (q.bloom) this.bloom.resolution.set(Math.max(64, w * q.bloomScale), Math.max(64, h * q.bloomScale));
+    if (q.bloom) this.bloom.resolution.set(Math.max(64, w * pr * q.bloomScale), Math.max(64, h * pr * q.bloomScale));
     if (this.effect) {
       this.effect.resize?.(w, h);
       this.effect.camera.aspect = w / Math.max(1, h);

@@ -7,6 +7,8 @@ import { createRing } from '../visualizer/effects/ring';
 import { createWave } from '../visualizer/effects/wave';
 import { createEqualizer } from '../visualizer/effects/equalizer';
 import { createHex } from '../visualizer/effects/hex';
+import { createLasers } from '../visualizer/effects/lasers';
+import { createGalaxy } from '../visualizer/effects/galaxy';
 
 interface VisualizerStudioProps {
   audioRef: React.RefObject<HTMLAudioElement | null>;
@@ -15,10 +17,16 @@ interface VisualizerStudioProps {
   currentTime: number;
   duration: number;
   onClose: () => void;
+  /** Počítač: panel vlevo od přehrávače (jinak překryv přes celé okno – telefon) */
+  docked?: boolean;
+  /** Změna velikosti okna tahem za levý okraj / roh */
+  onResizeStart?: (direction: 'West' | 'SouthWest') => void;
+  /** Přesun okna za prázdné místo horní lišty */
+  onDragStart?: () => void;
 }
 
-const EFFECTS: Array<() => Effect> = [createRing, createWave, createEqualizer, createHex];
-const EFFECT_NAMES = ['Neon Ring', 'Neon Wave', 'Neon Equalizer', 'Neon Hex'];
+const EFFECTS: Array<() => Effect> = [createRing, createWave, createEqualizer, createHex, createLasers, createGalaxy];
+const EFFECT_NAMES = ['Neon Ring', 'Neon Wave', 'Neon Equalizer', 'Neon Hex', 'Neon Lasers', 'Neon Galaxy'];
 const AUTO_CYCLE_S = 40;
 const SETTINGS_KEY = 'zvr-grid-visualizer';
 
@@ -34,7 +42,7 @@ const readSettings = (): { effect: number; auto: boolean } => {
 
 const formatTime = (s: number) => (Number.isFinite(s) && s > 0 ? `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}` : '0:00');
 
-export function VisualizerStudio({ audioRef, isPlaying, trackName, currentTime, duration, onClose }: VisualizerStudioProps) {
+export function VisualizerStudio({ audioRef, isPlaying, trackName, currentTime, duration, onClose, docked = false, onResizeStart, onDragStart }: VisualizerStudioProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const engineRef = useRef<VisualizerEngine | null>(null);
@@ -158,8 +166,27 @@ export function VisualizerStudio({ audioRef, isPlaying, trackName, currentTime, 
   return (
     <div
       ref={containerRef}
-      className={`absolute inset-0 z-50 flex items-center justify-center bg-black overflow-hidden ${!isFullscreen ? 'rounded-3xl border-2 border-cyan-500/20 shadow-[0_0_50px_rgba(0,243,255,0.15)] m-4' : ''} ${hideUi ? 'cursor-none' : ''}`}
+      className={`${docked ? 'relative w-full h-full border-r border-cyan-500/30' : 'absolute inset-0 z-50'} flex items-center justify-center bg-black overflow-hidden ${!isFullscreen && !docked ? 'rounded-3xl border-2 border-cyan-500/20 shadow-[0_0_50px_rgba(0,243,255,0.15)] m-4' : ''} ${hideUi ? 'cursor-none' : ''}`}
     >
+      {/* Změna velikosti: levý okraj a levý dolní roh (okno je bez systémového rámečku) */}
+      {docked && !isFullscreen && onResizeStart && (
+        <>
+          <div
+            className="absolute left-0 top-0 bottom-6 w-1.5 z-30 cursor-ew-resize hover:bg-cyan-400/30 transition-colors"
+            onPointerDown={(e) => { if (e.button === 0) onResizeStart('West'); }}
+            title="Táhnutím změníte šířku"
+          />
+          <div
+            className="absolute left-0 bottom-0 w-6 h-6 z-30 cursor-nesw-resize"
+            onPointerDown={(e) => { if (e.button === 0) onResizeStart('SouthWest'); }}
+            title="Táhnutím změníte velikost"
+          >
+            <svg viewBox="0 0 24 24" className="w-full h-full text-cyan-400/60 hover:text-cyan-300">
+              <path d="M4 10v10h10M4 15l5 5M4 20" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" />
+            </svg>
+          </div>
+        </>
+      )}
       <canvas
         ref={canvasRef}
         className="w-full h-full absolute inset-0 z-0 transition-opacity duration-200"
@@ -179,7 +206,13 @@ export function VisualizerStudio({ audioRef, isPlaying, trackName, currentTime, 
       </div>
 
       {/* Horní lišta */}
-      <div className={`absolute top-0 inset-x-0 z-20 p-4 md:p-6 flex justify-between items-start transition-opacity duration-500 ${hideUi ? 'opacity-0' : 'opacity-100'}`}>
+      <div
+        className={`absolute top-0 inset-x-0 z-20 p-4 md:p-6 flex justify-between items-start transition-opacity duration-500 ${hideUi ? 'opacity-0' : 'opacity-100'} ${docked && !isFullscreen ? 'cursor-move' : ''}`}
+        onPointerDown={(e) => {
+          // Prázdné místo lišty = přesun okna (jako titulek přehrávače)
+          if (docked && !isFullscreen && e.button === 0 && e.target === e.currentTarget) onDragStart?.();
+        }}
+      >
         <button onClick={onClose} title="Zavřít (Esc)" className={`${btn} hover:!text-pink-500 hover:!border-pink-500/50`}>
           <X size={24} />
         </button>

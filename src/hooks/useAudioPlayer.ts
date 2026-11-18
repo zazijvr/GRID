@@ -49,6 +49,8 @@ export function useAudioPlayer() {
   const sessionFiles = useRef(new Map<string, Blob>());
   /** Číslo posledního požadavku na načtení – starší (rychlé přeskakování) se zahodí */
   const loadToken = useRef(0);
+  /** Připravené data: URL (aktuální a následující skladba) – přepnutí bez čekání na převod */
+  const urlCache = useRef(new Map<string, Promise<string>>());
 
   useEffect(() => { repeatModeRef.current = repeatMode; }, [repeatMode]);
   useEffect(() => { shuffleRef.current = shuffle; }, [shuffle]);
@@ -95,6 +97,37 @@ export function useAudioPlayer() {
     setDuration(0);
   }, []);
 
+  /** data: URL skladby – z mezipaměti, nebo převodem souboru */
+  const trackUrl = useCallback((id: string): Promise<string> => {
+    const cache = urlCache.current;
+    let p = cache.get(id);
+    if (!p) {
+      p = (async () => {
+        const blob = sessionFiles.current.get(id) ?? (await getBlob(id));
+        if (!blob) throw new Error('Soubor skladby chybí');
+        return blobToDataUrl(blob);
+      })();
+      p.catch(() => cache.delete(id));
+      cache.set(id, p);
+    }
+    return p;
+  }, []);
+
+  /** Dopředu připraví následující skladbu; v paměti drží jen aktuální a příští (data: URL jsou velké) */
+  const prefetchNext = useCallback((index: number) => {
+    const list = tracksRef.current;
+    const keep = new Set([list[index]?.id]);
+    if (!shuffleRef.current && list.length > 1) {
+      const next = index + 1 < list.length ? index + 1 : repeatModeRef.current === 'all' ? 0 : -1;
+      if (next >= 0) {
+        keep.add(list[next].id);
+        // Až po rozběhnutí aktuální skladby – převod nesmí zdržet start
+        setTimeout(() => { trackUrl(list[next].id).catch(() => {}); }, 1500);
+      }
+    }
+    for (const id of urlCache.current.keys()) if (!keep.has(id)) urlCache.current.delete(id);
+  }, [trackUrl]);
+
   /** Načte skladbu a (volitelně) spustí. Bezpečné při rychlém přeskakování. */
   const loadAndPlay = useCallback(async (index: number, shouldPlay = true) => {
     const audio = audioRef.current;
@@ -119,9 +152,7 @@ export function useAudioPlayer() {
 
     let url: string;
     try {
-      const blob = sessionFiles.current.get(track.id) ?? (await getBlob(track.id));
-      if (!blob) throw new Error('Soubor skladby chybí');
-      url = await blobToDataUrl(blob);
+      url = await trackUrl(track.id);
     } catch (e) {
       console.warn(`Skladbu „${track.name}“ nejde načíst`, e);
       if (token === loadToken.current) setIsPlaying(false);
@@ -131,6 +162,7 @@ export function useAudioPlayer() {
 
     audio.src = url;
     audio.load();
+    prefetchNext(index);
     if (!shouldPlay) return;
     if (graph) restoreVolume(graph);
     audio.play().catch((e) => {
@@ -138,7 +170,7 @@ export function useAudioPlayer() {
       console.warn('Přehrání se nepodařilo', e);
       setIsPlaying(false);
     });
-  }, [commitIndex]);
+  }, [commitIndex, trackUrl, prefetchNext]);
 
   /** Index další skladby (shuffle / konec playlistu podle opakování); null = konec */
   const pickNext = useCallback((): number | null => {
@@ -224,6 +256,7 @@ export function useAudioPlayer() {
     if (!files.some(isAudioFile)) return;
     stopAudio();
     sessionFiles.current.clear();
+    urlCache.current.clear();
     await clearBlobs();
     const added = await importFiles(files);
     commitTracks(added);
