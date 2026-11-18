@@ -1,4 +1,4 @@
-import React, { useRef, useState, useCallback, lazy, Suspense } from 'react';
+import React, { useRef, useState, useCallback, useEffect, lazy, Suspense } from 'react';
 import { 
   Play, Pause, SkipForward, SkipBack, Shuffle, Repeat, Repeat1, FolderPlus, FolderOpen, Trash2, Volume2, VolumeX, Minimize2, X, MonitorPlay 
 } from 'lucide-react';
@@ -53,6 +53,8 @@ function App() {
   const [isDragging,    setIsDragging]    = useState(false);
   const [showVisualizer, setShowVisualizer] = useState(false);
   const [showEQ,         setShowEQ]        = useState(false);
+  /** Visualizer přes celý monitor (celá obrazovka okna) */
+  const [vizFullscreen, setVizFullscreen] = useState(false);
   const [activePreset,   setActivePreset]  = useState<EQPreset>('flat');
 
   const [scrubbingTime, setScrubbingTime] = useState<number | null>(null);
@@ -98,10 +100,35 @@ function App() {
     if (!isMobile) resizeWindow(fixedWidth(showEQ) + VIZ_WIDTH, vizOnRight ? 0 : VIZ_WIDTH).catch(() => {});
   }, [showEQ, resizeWindow]);
 
+  // Celá obrazovka: celé okno přes monitor, visualizer přes celé okno (přehrávač a EQ pod ním)
+  const setFullscreen = useCallback(async (on: boolean) => {
+    setVizFullscreen(on);
+    if (isTauri() && !isMobile) {
+      try {
+        const w = await tauriWindow();
+        // Okno s pevnou velikostí některé správce oken (KWin) na celou obrazovku nepustí → dočasně povolit
+        if (on) await w.setResizable(true);
+        await w.setFullscreen(on);
+        if (!on) await w.setResizable(false);
+      } catch (e) {
+        console.warn('Celá obrazovka není k dispozici', e);
+      }
+    }
+  }, []);
+
+  // Okno opustilo celou obrazovku jinak (systémová klávesa, správce oken) → srovnat stav
+  useEffect(() => {
+    if (!vizFullscreen || !isTauri()) return;
+    const onResize = () => { tauriWindow().then(async (w) => { if (!(await w.isFullscreen())) { setVizFullscreen(false); await w.setResizable(false); } }).catch(() => {}); };
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, [vizFullscreen]);
+
   const closeVisualizer = useCallback(() => {
+    if (vizFullscreen) setFullscreen(false);
     setShowVisualizer(false);
     if (!isMobile) resizeWindow(fixedWidth(showEQ), vizOnRight ? 0 : -VIZ_WIDTH).catch(() => {});
-  }, [showEQ, resizeWindow]);
+  }, [showEQ, resizeWindow, vizFullscreen, setFullscreen]);
 
   const formatTime = (time: number) => {
     if (isNaN(time) || !isFinite(time)) return '0:00';
@@ -146,7 +173,10 @@ function App() {
   // Visualizer (počítač): Windows / X11 vlevo od přehrávače (okno se posune doleva),
   // Linux vpravo – Wayland aplikaci posouvat okno nedovolí, rostlo by jen doprava
   const visualizerPanel = (
-    <div className="relative shrink-0 h-full" style={{ width: VIZ_WIDTH }}>
+    <div
+      className={vizFullscreen ? 'fixed inset-0 z-50' : 'relative shrink-0 h-full'}
+      style={vizFullscreen ? undefined : { width: VIZ_WIDTH }}
+    >
       <Suspense fallback={null}>
         <VisualizerStudio
           docked
@@ -163,6 +193,8 @@ function App() {
           onSeek={seek}
           onVolume={setVolume}
           side={vizOnRight ? 'right' : 'left'}
+          fullscreen={vizFullscreen}
+          onFullscreen={isTauri() ? setFullscreen : undefined}
           onDragStart={() => { if (isTauri()) tauriWindow().then((w) => w.startDragging()); }}
         />
       </Suspense>

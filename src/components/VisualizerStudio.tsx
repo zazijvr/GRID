@@ -19,6 +19,9 @@ interface VisualizerStudioProps {
   onClose: () => void;
   /** Počítač: panel vlevo od přehrávače (jinak překryv přes celé okno – telefon) */
   docked?: boolean;
+  /** Skutečná celá obrazovka okna (Tauri) – řídí ji App; bez ní celá obrazovka prohlížeče */
+  fullscreen?: boolean;
+  onFullscreen?: (on: boolean) => void;
   /** Na které straně je přehrávač (okraj panelu) */
   side?: 'left' | 'right';
   /** Ovládání přehrávání (na celé obrazovce) */
@@ -49,14 +52,15 @@ const readSettings = (): { effect: number; auto: boolean } => {
 
 const formatTime = (s: number) => (Number.isFinite(s) && s > 0 ? `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}` : '0:00');
 
-export function VisualizerStudio({ audioRef, isPlaying, trackName, currentTime, duration, onClose, docked = false, onDragStart, side = 'left', volume, onTogglePlay, onNext, onPrev, onSeek, onVolume }: VisualizerStudioProps) {
+export function VisualizerStudio({ audioRef, isPlaying, trackName, currentTime, duration, onClose, docked = false, onDragStart, side = 'left', fullscreen = false, onFullscreen, volume, onTogglePlay, onNext, onPrev, onSeek, onVolume }: VisualizerStudioProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const engineRef = useRef<VisualizerEngine | null>(null);
   const [initial] = useState(readSettings);
   const [effectIndex, setEffectIndex] = useState(initial.effect);
   const [autoCycle, setAutoCycle] = useState(initial.auto);
-  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [browserFullscreen, setBrowserFullscreen] = useState(false);
+  const isFullscreen = onFullscreen ? fullscreen : browserFullscreen;
   const [error, setError] = useState<string | null>(null);
   const [fading, setFading] = useState(false);
   const [showName, setShowName] = useState(true);
@@ -130,14 +134,19 @@ export function VisualizerStudio({ audioRef, isPlaying, trackName, currentTime, 
 
   // ── Celá obrazovka ──
   useEffect(() => {
-    const onChange = () => setIsFullscreen(!!document.fullscreenElement);
+    const onChange = () => setBrowserFullscreen(!!document.fullscreenElement);
     document.addEventListener('fullscreenchange', onChange);
     return () => document.removeEventListener('fullscreenchange', onChange);
   }, []);
   const toggleFullscreen = useCallback(() => {
+    // Aplikace: celé okno přes celý monitor (Tauri); prohlížeč: Fullscreen API
+    if (onFullscreen) {
+      onFullscreen(!fullscreen);
+      return;
+    }
     const p = document.fullscreenElement ? document.exitFullscreen() : containerRef.current?.requestFullscreen();
     p?.catch((e) => console.warn('Celá obrazovka není k dispozici', e));
-  }, []);
+  }, [onFullscreen, fullscreen]);
 
   // ── Klávesy: ←/→ efekt, F celá obrazovka, A střídání, Esc zavřít ──
   useEffect(() => {
@@ -147,13 +156,16 @@ export function VisualizerStudio({ audioRef, isPlaying, trackName, currentTime, 
       else if (e.key === 'f' || e.key === 'F') toggleFullscreen();
       else if (e.key === 'a' || e.key === 'A') setAutoCycle((a) => !a);
       else if (e.key === ' ') onTogglePlay();
-      else if (e.key === 'Escape' && !document.fullscreenElement) onClose();
+      else if (e.key === 'Escape') {
+        if (onFullscreen && fullscreen) onFullscreen(false); // Esc nejdřív ukončí celou obrazovku
+        else if (!document.fullscreenElement) onClose();
+      }
       else return;
       e.preventDefault();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [step, toggleFullscreen, onClose, onTogglePlay]);
+  }, [step, toggleFullscreen, onClose, onTogglePlay, onFullscreen, fullscreen]);
 
   // ── Ovládání se po 3 s bez pohybu myši schová (na celé obrazovce) ──
   useEffect(() => {
@@ -181,7 +193,7 @@ export function VisualizerStudio({ audioRef, isPlaying, trackName, currentTime, 
   return (
     <div
       ref={containerRef}
-      className={`${docked ? `relative w-full h-full ${side === 'right' ? 'border-l' : 'border-r'} border-cyan-500/30` : 'absolute inset-0 z-50'} flex items-center justify-center bg-black overflow-hidden ${!isFullscreen && !docked ? 'rounded-3xl border-2 border-cyan-500/20 shadow-[0_0_50px_rgba(0,243,255,0.15)] m-4' : ''} ${hideUi ? 'cursor-none' : ''}`}
+      className={`${docked || isFullscreen ? `relative w-full h-full ${side === 'right' ? 'border-l' : 'border-r'} border-cyan-500/30` : 'absolute inset-0 z-50'} flex items-center justify-center bg-black overflow-hidden ${!isFullscreen && !docked ? 'rounded-3xl border-2 border-cyan-500/20 shadow-[0_0_50px_rgba(0,243,255,0.15)] m-4' : ''} ${hideUi ? 'cursor-none' : ''}`}
     >
       <canvas
         ref={canvasRef}
