@@ -44,6 +44,23 @@ html.opaque-window body {
   background: rgba(0, 243, 255, 0.5);
 }
 
+/* Logo ZažijVR: občas neonově problikne a rozzáří se (stejně jako v Moje Káře) */
+@keyframes grid-neon-blink {
+  0%, 12%, 100% { opacity: 0.85; filter: drop-shadow(0 0 0 transparent); }
+  1%   { opacity: 0.25; }
+  2%   { opacity: 0.9; }
+  3%   { opacity: 0.3; }
+  4.5% { opacity: 1; filter: drop-shadow(0 0 6px color-mix(in srgb, var(--color-neon-blue) 85%, transparent)); }
+  8%   { opacity: 1; filter: drop-shadow(0 0 4px color-mix(in srgb, var(--color-neon-blue) 60%, transparent)); }
+}
+.grid-neon-logo {
+  opacity: 0.85;
+  animation: grid-neon-blink 10s linear 3s infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .grid-neon-logo { animation: none; }
+}
+
 @keyframes equalizer {
   0% { height: 2px; }
   100% { height: 12px; }

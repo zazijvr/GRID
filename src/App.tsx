@@ -160,6 +160,12 @@ function App() {
     else window.close();
   };
 
+  // Logo v titulku → web ZažijVR (v aplikaci přes Rust – jen tahle pevná adresa)
+  const openWebsite = () => {
+    if (isTauri()) import('@tauri-apps/api/core').then(({ invoke }) => invoke('open_website')).catch((e) => console.warn('Web se nepodařilo otevřít', e));
+    else window.open('https://zazijvr.cz', '_blank', 'noopener');
+  };
+
   const minimizeWindow = () => {
     if (isTauri()) tauriWindow().then((w) => w.minimize());
   };
@@ -225,7 +231,15 @@ function App() {
             className="h-10 shrink-0 bg-gradient-to-r from-slate-950 via-slate-900 to-slate-950 flex items-center justify-between px-3 border-b border-cyan-500/30 select-none cursor-move shadow-[0_2px_10px_rgba(0,243,255,0.1)]"
           >
             <div data-tauri-drag-region className="flex items-center gap-3 text-cyan-400 font-bold text-sm tracking-widest uppercase pointer-events-none drop-shadow-[0_0_5px_rgba(0,243,255,0.6)]">
-              <img src="/logo.png" alt="Zažij VR Logo" className="h-6 object-contain drop-shadow-[0_0_8px_rgba(248,0,255,0.6)]" draggable={false} />
+              <button
+                type="button"
+                onClick={openWebsite}
+                title="zazijvr.cz"
+                aria-label="Otevřít web ZažijVR"
+                className="pointer-events-auto hover:scale-105 active:scale-95 transition-transform"
+              >
+                <img src="/logo.png" alt="Zažij VR" className="grid-neon-logo h-6 object-contain" draggable={false} />
+              </button>
             </div>
             <div className="flex items-center gap-1.5">
               {/* EQ toggle button */}
