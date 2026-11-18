@@ -123,7 +123,7 @@ export function Equalizer({ audioRef, isOpen, onClose, onPresetChange }: Equaliz
   return (
     <div
       className={`
-        flex flex-col h-full bg-slate-900/95 backdrop-blur-md border-l border-cyan-500/20
+        flex flex-col h-full bg-slate-900/95 border-l border-cyan-500/20
         shadow-[-8px_0_30px_rgba(0,0,0,0.5)] overflow-hidden shrink-0
         ${isOpen ? 'w-[280px]' : 'w-0'}
       `}

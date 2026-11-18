@@ -1,0 +1,17 @@
+{
+  "app": {
+    "windows": [
+      {
+        "title": "Zažij VR Grid",
+        "width": 350,
+        "height": 600,
+        "minWidth": 300,
+        "minHeight": 400,
+        "decorations": false,
+        "transparent": false,
+        "resizable": true,
+        "backgroundColor": "#0f172a"
+      }
+    ]
+  }
+}

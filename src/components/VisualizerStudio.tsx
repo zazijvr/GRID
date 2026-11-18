@@ -339,7 +339,7 @@ export function VisualizerStudio({ audioRef, isPlaying, onClose }: VisualizerStu
         <button
           onClick={onClose}
           title="Zavřít Visualizer"
-          className="p-3 bg-slate-900/80 rounded-full border border-white/10 text-slate-300 hover:text-pink-500 hover:border-pink-500/50 hover:shadow-[0_0_15px_rgba(255,0,255,0.5)] transition-all backdrop-blur-md"
+          className="p-3 bg-slate-900/80 rounded-full border border-white/10 text-slate-300 hover:text-pink-500 hover:border-pink-500/50 hover:shadow-[0_0_15px_rgba(255,0,255,0.5)] transition-all"
         >
           <X size={28} />
         </button>
@@ -348,7 +348,7 @@ export function VisualizerStudio({ audioRef, isPlaying, onClose }: VisualizerStu
           <button
             onClick={() => setEffectIndex((p) => (p + 1) % EFFECTS.length)}
             title={`Přepnout vizualizaci (${EFFECT_NAMES[effectIndex]})`}
-            className="p-3 font-semibold tracking-wide bg-slate-900/80 rounded-full border border-white/10 text-slate-300 hover:text-cyan-400 hover:border-cyan-400/50 hover:shadow-[0_0_15px_rgba(0,243,255,0.5)] transition-all backdrop-blur-md flex items-center gap-2"
+            className="p-3 font-semibold tracking-wide bg-slate-900/80 rounded-full border border-white/10 text-slate-300 hover:text-cyan-400 hover:border-cyan-400/50 hover:shadow-[0_0_15px_rgba(0,243,255,0.5)] transition-all flex items-center gap-2"
           >
             <ChevronRight size={24} /> Mode {effectIndex + 1}
           </button>
@@ -356,7 +356,7 @@ export function VisualizerStudio({ audioRef, isPlaying, onClose }: VisualizerStu
           <button
             onClick={toggleFullscreen}
             title={isFullscreen ? 'Ukončit celou obrazovku' : 'Celá obrazovka'}
-            className={`p-3 bg-slate-900/80 rounded-full border-2 transition-all backdrop-blur-md ${isFullscreen ? 'border-cyan-500 text-cyan-400 shadow-[0_0_15px_rgba(0,243,255,0.5)]' : 'border-white/10 text-slate-300 hover:text-cyan-400 hover:border-cyan-400/50 hover:shadow-[0_0_15px_rgba(0,243,255,0.5)]'}`}
+            className={`p-3 bg-slate-900/80 rounded-full border-2 transition-all ${isFullscreen ? 'border-cyan-500 text-cyan-400 shadow-[0_0_15px_rgba(0,243,255,0.5)]' : 'border-white/10 text-slate-300 hover:text-cyan-400 hover:border-cyan-400/50 hover:shadow-[0_0_15px_rgba(0,243,255,0.5)]'}`}
           >
             <Maximize size={28} />
           </button>

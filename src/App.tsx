@@ -132,7 +132,7 @@ function App() {
       onDrop={handleDrop}
     >
       {/* ── LEFT COLUMN – PLAYER – fixní šířka aby EQ panel nevytlačil obsah ── */}
-      <div className="flex flex-col bg-slate-900/90 backdrop-blur-md overflow-hidden shrink-0" style={{ width: isMobile ? '100%' : PLAYER_WIDTH }}>
+      <div className="flex flex-col bg-slate-900/90 overflow-hidden shrink-0" style={{ width: isMobile ? '100%' : PLAYER_WIDTH }}>
 
         {/* Title Bar */}
         {!isMobile && (
@@ -235,7 +235,7 @@ function App() {
                 </div>
               </div>
               <div
-                className={`absolute top-1/2 -translate-y-1/2 w-4 h-4 rounded-full pointer-events-none z-20 flex items-center justify-center backdrop-blur-sm transition-all duration-150 ${scrubbingTime !== null ? 'bg-white/90 border-2 border-pink-500 shadow-[0_0_15px_rgba(248,0,255,0.8)] scale-[1.3]' : 'bg-pink-500/90 border border-white/50 shadow-[0_0_8px_rgba(248,0,255,0.5)] group-hover:scale-110 group-hover:bg-pink-400'}`}
+                className={`absolute top-1/2 -translate-y-1/2 w-4 h-4 rounded-full pointer-events-none z-20 flex items-center justify-center transition-all duration-150 ${scrubbingTime !== null ? 'bg-white/90 border-2 border-pink-500 shadow-[0_0_15px_rgba(248,0,255,0.8)] scale-[1.3]' : 'bg-pink-500/90 border border-white/50 shadow-[0_0_8px_rgba(248,0,255,0.5)] group-hover:scale-110 group-hover:bg-pink-400'}`}
                 style={{ left: `calc(${duration > 0 ? ((scrubbingTime !== null ? scrubbingTime : currentTime) / duration) * 100 : 0}% - 8px)` }}
               >
                 <div className={`w-1.5 h-1.5 rounded-full ${scrubbingTime !== null ? 'bg-pink-500' : 'bg-white'}`} />
@@ -348,7 +348,7 @@ function App() {
                 />
               </div>
               <div
-                className={`absolute top-1/2 -translate-y-1/2 w-4 h-4 rounded-full pointer-events-none z-20 flex items-center justify-center backdrop-blur-sm transition-all duration-150 ${volume > 0 ? 'bg-cyan-400 border border-white/50 shadow-[0_0_8px_rgba(0,243,255,0.5)] group-hover:bg-cyan-300 group-hover:scale-110 group-active:bg-white/90 group-active:border-2 group-active:border-cyan-400 group-active:shadow-[0_0_15px_rgba(0,243,255,0.8)] group-active:scale-[1.3]' : 'bg-slate-700 border border-slate-500'}`}
+                className={`absolute top-1/2 -translate-y-1/2 w-4 h-4 rounded-full pointer-events-none z-20 flex items-center justify-center transition-all duration-150 ${volume > 0 ? 'bg-cyan-400 border border-white/50 shadow-[0_0_8px_rgba(0,243,255,0.5)] group-hover:bg-cyan-300 group-hover:scale-110 group-active:bg-white/90 group-active:border-2 group-active:border-cyan-400 group-active:shadow-[0_0_15px_rgba(0,243,255,0.8)] group-active:scale-[1.3]' : 'bg-slate-700 border border-slate-500'}`}
                 style={{ left: `calc(${volume * 100}% - 8px)` }}
               >
                 <div className="w-1.5 h-1.5 rounded-full bg-white group-active:bg-cyan-500" />
