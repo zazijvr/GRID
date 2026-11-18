@@ -6,13 +6,17 @@ export { EQ_BANDS };
 
 export type EQGains = [number, number, number, number, number, number, number, number, number, number];
 
-export type EQPreset = 'flat' | 'dance' | 'energy' | 'vocal' | 'custom';
+export type EQPreset = 'flat' | 'dance' | 'energy' | 'vocal' | 'epic' | 'relax' | 'custom';
 
 export const EQ_PRESETS: Record<Exclude<EQPreset, 'custom'>, EQGains> = {
   flat:   [ 0,  0,  0,  0,  0,  0,  0,  0,  0,  0],
   dance:  [ 6,  7,  2,  0, -2, -1,  0,  2,  3,  3],
   energy: [ 5,  4,  1,  0, -2,  1,  3,  4,  4,  3],
   vocal:  [-2, -3, -1,  2,  5,  6,  4,  2,  1, -1],
+  // Orchestr / filmová hudba: tympány a žestě dole, méně „bahna“ ve spodních středech, víc lesku smyčců
+  epic:   [ 5,  4,  2, -1, -2,  0,  2,  3,  4,  4],
+  // Relax: teplý a měkký zvuk, ztlumené ostré výšky (únava sluchu při dlouhém poslechu)
+  relax:  [ 3,  3,  2,  1,  0, -1, -2, -3, -4, -5],
 };
 
 type PresetMeta = {
@@ -26,6 +30,8 @@ const PRESETS_META: Record<EQPreset, PresetMeta> = {
   flat:   { label: 'Flat',   color: '#94a3b8', activeClass: 'bg-slate-700/80 text-slate-100 border-slate-400 shadow-[0_0_12px_rgba(148,163,184,0.3)]',   badgeClass: 'text-slate-400 border-slate-500 bg-slate-800' },
   dance:  { label: 'Dance',  color: '#f472b6', activeClass: 'bg-pink-500/20 text-pink-300 border-pink-500 shadow-[0_0_15px_rgba(248,0,255,0.4)]',         badgeClass: 'text-pink-400 border-pink-500 bg-pink-500/10' },
   energy: { label: 'Energy', color: '#fb923c', activeClass: 'bg-orange-500/20 text-orange-300 border-orange-500 shadow-[0_0_15px_rgba(251,146,60,0.4)]',  badgeClass: 'text-orange-400 border-orange-500 bg-orange-500/10' },
+  epic:   { label: 'Epic',   color: '#fbbf24', activeClass: 'bg-amber-500/20 text-amber-300 border-amber-500 shadow-[0_0_15px_rgba(251,191,36,0.4)]',   badgeClass: 'text-amber-400 border-amber-500 bg-amber-500/10' },
+  relax:  { label: 'Relax',  color: '#34d399', activeClass: 'bg-emerald-500/20 text-emerald-300 border-emerald-500 shadow-[0_0_15px_rgba(52,211,153,0.4)]', badgeClass: 'text-emerald-400 border-emerald-500 bg-emerald-500/10' },
   vocal:  { label: 'Vocal',  color: '#22d3ee', activeClass: 'bg-cyan-500/20 text-cyan-300 border-cyan-500 shadow-[0_0_15px_rgba(0,243,255,0.4)]',         badgeClass: 'text-cyan-400 border-cyan-500 bg-cyan-500/10' },
   custom: { label: 'Custom', color: '#c084fc', activeClass: 'bg-purple-500/20 text-purple-300 border-purple-500 shadow-[0_0_15px_rgba(168,85,247,0.4)]', badgeClass: 'text-purple-400 border-purple-500 bg-purple-500/10' },
 };
@@ -117,7 +123,7 @@ export function Equalizer({ audioRef, isOpen, onClose, onPresetChange }: Equaliz
 
   const resetAll = () => selectPreset('flat');
 
-  const presets: EQPreset[] = ['dance', 'energy', 'vocal', 'custom'];
+  const presets: EQPreset[] = ['dance', 'energy', 'vocal', 'epic', 'relax', 'custom'];
   const meta = PRESETS_META[preset];
 
   return (
@@ -154,7 +160,7 @@ export function Equalizer({ audioRef, isOpen, onClose, onPresetChange }: Equaliz
       </div>
 
       {/* Preset buttons */}
-      <div className="grid grid-cols-2 gap-1.5 px-3 pt-3 pb-2 shrink-0">
+      <div className="grid grid-cols-3 gap-1.5 px-3 pt-3 pb-2 shrink-0">
         {presets.map(p => {
           const m = PRESETS_META[p];
           const isActive = preset === p;

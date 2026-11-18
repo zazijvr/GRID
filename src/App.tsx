@@ -445,6 +445,9 @@ function App() {
           <VisualizerStudio
             audioRef={audioRef}
             isPlaying={isPlaying}
+            trackName={currentTrack?.name ?? null}
+            currentTime={currentTime}
+            duration={duration}
             onClose={() => setShowVisualizer(false)}
           />
         </Suspense>
