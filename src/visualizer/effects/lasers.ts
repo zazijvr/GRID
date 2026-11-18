@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import type { Effect } from '../engine';
 import { SPECTRUM_BANDS } from '../audioFeatures';
-import { createLogo, createNeonLine, createSparks } from './common';
+import { createLogo, createNeonLine, createSparks, levelOf } from './common';
 
 /**
  * Neon Lasers – laserová show jako v klubu: paprsky ze tří zdrojů dole, kužel světla v „mlze“,
@@ -79,24 +79,26 @@ export function createLasers(): Effect {
     bloomStrength: (f) => 0.8 + f.pulse * 0.6,
     resize: (w, h) => beams.forEach((b) => b.core.resize(w, h)),
     update(f, dt, t) {
-      phase += (0.6 + f.mid * 2.5) * dt;
+      phase += (0.4 + f.midN * 4 + f.pulse * 3) * dt;
       if (f.beat && ++beats % 4 === 0) pattern = (pattern + 1) % 3;
 
       for (const b of beams) {
-        const level = f.spectrum[b.band];
+        const level = levelOf(f, b.band);
         const a = angleOf(b.e, b.k, phase);
-        const len = LEN * (0.55 + level * 0.45);
+        const len = LEN * (0.35 + level * 0.65);
         // Paprsky za logem (z = −3) – logo zůstane čitelné
         b.core.set(0, b.ex, BASE_Y, -3);
         b.core.set(1, b.ex + Math.sin(a) * len, BASE_Y + Math.cos(a) * len, -3);
         b.core.commit();
-        b.core.line.visible = level > 0.04 || f.pulse > 0.5;
-        tmp.copy(b.color).lerp(white, f.pulse * 0.6);
+        b.core.line.visible = level > 0.15 || f.pulse > 0.4;
+        b.cone.visible = b.core.line.visible;
+        b.core.material.linewidth = 1.5 + level * 3 + f.pulse * 2;
+        tmp.copy(b.color).lerp(white, f.pulse * 0.8); // stroboskop na beat
         b.core.material.color.copy(tmp);
         b.cone.rotation.z = -a;
         b.cone.scale.set(1 + f.pulse * 0.8, len / LEN, 1);
         b.coneMat.color.copy(tmp);
-        b.coneMat.opacity = 0.05 + level * 0.18 + f.pulse * 0.08;
+        b.coneMat.opacity = 0.03 + level * 0.25 + f.pulse * 0.15;
       }
       floorMat.color.setHSL(0.5 + Math.sin(t * 0.5) * 0.1, 1, 0.5 + f.pulse * 0.3);
       logo.update(f);

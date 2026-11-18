@@ -78,7 +78,8 @@ export function VisualizerStudio({ audioRef, isPlaying, trackName, currentTime, 
       raf = requestAnimationFrame(frame);
       const dt = Math.min(0.1, (now - last) / 1000); // po skrytí okna žádný skok
       last = now;
-      analyzer.update(getAudioGraph(audioRef.current)?.analyser ?? null, playingRef.current, dt);
+      const graph = getAudioGraph(audioRef.current);
+      analyzer.update(graph?.analyser ?? null, playingRef.current, dt, graph?.bassAnalyser);
       engine.render(analyzer.features, dt);
     };
     raf = requestAnimationFrame(frame);

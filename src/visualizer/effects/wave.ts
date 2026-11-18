@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import type { Effect } from '../engine';
 import { SPECTRUM_BANDS, WAVE_POINTS } from '../audioFeatures';
-import { createLogo, createNeonLine, createSparks } from './common';
+import { createLogo, createNeonLine, createSparks, levelOf } from './common';
 
 /**
  * Neon Wave – kruhový osciloskop kolem loga: skutečný průběh vlny (azurová), jeho zpožděná
@@ -18,7 +18,7 @@ export function createWave(): Effect {
   scene.add(root);
 
   const POINTS = 192;
-  const R = 16;
+  const R = 17;
   const wave = createNeonLine(POINTS, 0x00f3ff, 3, true);
   const echo = createNeonLine(POINTS, 0xff2bd6, 2, true, 0.8);
   const spec = createNeonLine(POINTS, 0x9d5cff, 2, true, 0.75);
@@ -44,6 +44,7 @@ export function createWave(): Effect {
   const echoBuf = new Float32Array(WAVE_POINTS);
   const cyan = new THREE.Color(0x00f3ff);
   const pink = new THREE.Color(0xff2bd6);
+  const white = new THREE.Color(0xffffff);
 
   // Uzavřená smyčka bez skoku: vlna se zrcadlí (0→1→0), takže začátek a konec navazují
   const waveAt = (src: Float32Array, i: number) => {
@@ -65,24 +66,28 @@ export function createWave(): Effect {
       // Ozvěna = pomaleji vyhlazená vlna
       for (let i = 0; i < WAVE_POINTS; i++) echoBuf[i] += (f.waveform[i] - echoBuf[i]) * Math.min(1, dt * 6);
 
-      const base = R * (1 + f.bass * 0.15 + f.pulse * 0.06);
-      const amp = 2 + f.energy * 4; // vlna nesmí zasahovat do loga
+      const base = R * (1 + f.bassN * 0.2 + f.pulse * 0.12);
+      const amp = 3 + f.energyN * 8;
+      const inward = 6; // dovnitř nejvýš o tolik – vlna nesmí zasahovat do loga
       for (let i = 0; i < POINTS; i++) {
         const a = (i / POINTS) * Math.PI * 2 + Math.PI / 2;
         const c = Math.cos(a), s = Math.sin(a);
-        const rw = base + waveAt(f.waveform, i) * amp;
+        const rw = base + Math.max(-inward, waveAt(f.waveform, i) * amp);
         wave.set(i, c * rw, s * rw);
-        const re = base + 2.5 + waveAt(echoBuf, i) * amp * 1.3;
+        const re = base + 2.5 + Math.max(-inward, waveAt(echoBuf, i) * amp * 1.3);
         echo.set(i, c * re, s * re);
         // Spektrum zrcadlově (basy nahoře)
         const half = POINTS / 2;
         const band = Math.min(SPECTRUM_BANDS - 1, Math.floor((i < half ? i / half : (POINTS - i) / half) * (SPECTRUM_BANDS - 1)));
-        const rs = base + 5 + f.spectrum[band] * 7;
+        const rs = base + 5 + levelOf(f, band) * 13;
         spec.set(i, c * rs, s * rs);
       }
       lines.forEach((l) => l.commit());
-      wave.material.color.copy(cyan).lerp(pink, f.high * 0.5);
-      root.rotation.z += (0.04 + f.mid * 0.2) * dt;
+      wave.material.color.copy(cyan).lerp(pink, f.highN * 0.6).lerp(white, f.pulse * 0.5);
+      wave.material.linewidth = 2.5 + f.bassN * 3 + f.pulse * 2;
+      echo.material.linewidth = 2 + f.midN * 2;
+      spec.material.color.setHSL(0.75 - f.highN * 0.15, 1, 0.55 + f.pulse * 0.2);
+      root.rotation.z += (0.04 + f.midN * 0.5) * dt;
 
       if (f.beat) {
         const r = ripples[nextRipple];

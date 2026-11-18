@@ -17,6 +17,8 @@ export interface AudioGraph {
   source: MediaElementAudioSourceNode;
   filters: BiquadFilterNode[];
   analyser: AnalyserNode;
+  /** Basová sonda pro detekci beatu: jen < 150 Hz, bez vyhlazení (kopák v ní nezmizí) */
+  bassAnalyser: AnalyserNode;
   gain: GainNode;
 }
 
@@ -56,7 +58,14 @@ export function ensureAudioGraph(audio: HTMLMediaElement): AudioGraph | null {
 
     const analyser = ctx.createAnalyser();
     analyser.fftSize = 2048; // 1024 pásem – vizualizace si je seskupí podle frekvencí
-    analyser.smoothingTimeConstant = 0.85;
+    analyser.smoothingTimeConstant = 0.6; // vizualizace si vyhlazuje samy
+
+    const lowpass = ctx.createBiquadFilter();
+    lowpass.type = 'lowpass';
+    lowpass.frequency.value = 150;
+    const bassAnalyser = ctx.createAnalyser();
+    bassAnalyser.fftSize = 1024;
+    bassAnalyser.smoothingTimeConstant = 0;
 
     const gain = ctx.createGain();
     gain.gain.value = volume;
@@ -65,10 +74,12 @@ export function ensureAudioGraph(audio: HTMLMediaElement): AudioGraph | null {
     for (let i = 0; i < filters.length - 1; i++) filters[i].connect(filters[i + 1]);
     filters[filters.length - 1].connect(analyser);
     analyser.connect(gain);
+    analyser.connect(lowpass); // vedlejší větev jen pro měření (do reproduktorů nevede)
+    lowpass.connect(bassAnalyser);
     gain.connect(ctx.destination);
 
     audio.volume = 1;
-    graph = { ctx, source, filters, analyser, gain };
+    graph = { ctx, source, filters, analyser, bassAnalyser, gain };
     graphs.set(audio, graph);
   }
   if (graph.ctx.state === 'suspended') graph.ctx.resume().catch(() => {});

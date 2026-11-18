@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import type { Effect } from '../engine';
 import { SPECTRUM_BANDS } from '../audioFeatures';
-import { createLogo, createSparks } from './common';
+import { createLogo, createSparks, levelOf } from './common';
 
 /**
  * Neon Hex – tunel neonových šestiúhelníků letících proti divákovi; každý patří k jednomu pásmu
@@ -59,8 +59,8 @@ export function createHex(): Effect {
     bloom: { strength: 0.85, radius: 0.4, threshold: 0.2 },
     bloomStrength: (f) => 0.7 + f.pulse * 0.5,
     update(f, dt, t) {
-      const speed = 14 + f.mid * 40 + f.pulse * 45;
-      spin += (0.15 + f.bass * 0.8 - spin) * Math.min(1, dt * 3);
+      const speed = 10 + f.energyN * 45 + f.pulse * 70;
+      spin += (0.1 + f.bassN * 1.4 - spin) * Math.min(1, dt * 3);
       tunnel.rotation.z += spin * dt;
 
       for (const h of hexes) {
@@ -69,13 +69,13 @@ export function createHex(): Effect {
           h.mesh.position.z -= COUNT * SPACING; // zpět dozadu, nové pásmo
           h.band = Math.floor(Math.random() * SPECTRUM_BANDS);
         }
-        const level = f.spectrum[h.band];
+        const level = levelOf(f, h.band);
         color.setHSL(0.5 + (h.band / SPECTRUM_BANDS) * 0.38, 1, 0.45 + level * 0.25);
-        h.mat.color.copy(color).lerp(white, f.pulse * 0.35);
+        h.mat.color.copy(color).lerp(white, f.pulse * 0.6);
         // Blízko kamery zprůhlednit (neproletí obrazovkou jako zeď)
         const near = THREE.MathUtils.smoothstep(h.mesh.position.z, 18, 32);
-        h.mat.opacity = (0.35 + level * 0.65) * (1 - near);
-        const sc = 1 + level * 0.25 + f.bass * 0.1;
+        h.mat.opacity = (0.2 + level * 0.8) * (1 - near);
+        const sc = 1 + level * 0.55 + f.bassN * 0.15 + f.pulse * 0.1;
         h.mesh.scale.set(sc, sc, 1);
       }
 
@@ -95,8 +95,8 @@ export function createHex(): Effect {
       sparks.update(dt);
       logo.update(f);
 
-      camera.position.x = Math.sin(t * 0.4) * (1.5 + f.bass * 2);
-      camera.position.y = Math.cos(t * 0.31) * (1.5 + f.bass * 2);
+      camera.position.x = Math.sin(t * 0.4) * (1.5 + f.bassN * 3) + (Math.random() - 0.5) * f.pulse * 0.8;
+      camera.position.y = Math.cos(t * 0.31) * (1.5 + f.bassN * 3) + (Math.random() - 0.5) * f.pulse * 0.8;
       camera.lookAt(0, 0, -50);
     },
   };

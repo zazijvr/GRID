@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import type { Effect } from '../engine';
 import { SPECTRUM_BANDS } from '../audioFeatures';
-import { createLogo } from './common';
+import { createLogo, levelOf } from './common';
 
 const GALAXY_VERTEX = `
   attribute float aBand; attribute float aSize; attribute vec3 aColor;
@@ -9,10 +9,10 @@ const GALAXY_VERTEX = `
   varying vec3 vColor; varying float vGlow;
   void main(){
     float lv = uLevels[int(aBand)];
-    vGlow = 0.35 + lv * 1.4 + uPulse * 0.4;
+    vGlow = 0.25 + lv * 1.8 + uPulse * 0.6;
     vColor = aColor;
     vec4 mv = modelViewMatrix * vec4(position * (1.0 + lv * 0.08), 1.0);
-    gl_PointSize = aSize * (1.0 + lv * 1.6) * uPixel * (60.0 / -mv.z);
+    gl_PointSize = aSize * (0.8 + lv * 2.4 + uPulse * 0.6) * uPixel * (60.0 / -mv.z);
     gl_Position = projectionMatrix * mv;
   }`;
 const GALAXY_FRAGMENT = `
@@ -79,7 +79,7 @@ export function createGalaxy(): Effect {
   // Rázové vlny na beat (ploché prstence v rovině galaxie)
   const waves = Array.from({ length: 4 }, () => {
     const mat = new THREE.MeshBasicMaterial({ color: 0x00f3ff, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false });
-    const mesh = new THREE.Mesh(new THREE.TorusGeometry(1, 0.012, 6, 160), mat);
+    const mesh = new THREE.Mesh(new THREE.TorusGeometry(1, 0.02, 6, 160), mat);
     mesh.rotation.x = Math.PI / 2;
     galaxy.add(mesh);
     return { mesh, mat, age: 99 };
@@ -99,9 +99,11 @@ export function createGalaxy(): Effect {
     resize: (_w, h) => { uniforms.uPixel.value = Math.max(0.6, h / 700); },
     update(f, dt, t) {
       const lv = uniforms.uLevels.value;
-      for (let i = 0; i < SPECTRUM_BANDS; i++) lv[i] = f.spectrum[i];
+      for (let i = 0; i < SPECTRUM_BANDS; i++) lv[i] = levelOf(f, i);
       uniforms.uPulse.value = f.pulse;
-      galaxy.rotation.y += (0.08 + f.bass * 0.5) * dt;
+      galaxy.rotation.y += (0.05 + f.energyN * 0.7 + f.pulse * 0.6) * dt;
+      const gs = 1 + f.bassN * 0.12 + f.pulse * 0.08;
+      galaxy.scale.set(gs, 1 + f.pulse * 0.6, gs);
 
       if (f.beat) {
         const w = waves[nextWave];

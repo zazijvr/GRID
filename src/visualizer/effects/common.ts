@@ -6,6 +6,10 @@ import type { AudioFeatures } from '../audioFeatures';
 
 // Společné prvky neonových efektů: logo ZažijVR, jiskry na beat, silné neonové čáry.
 
+/** Úroveň pásma pro efekty: 35 % skutečná hlasitost (ticho zůstane klidné) + 65 % vyrovnaná
+ *  dynamika (výrazný pohyb i u hlasité, zkomprimované hudby) */
+export const levelOf = (f: AudioFeatures, band: number) => f.spectrum[band] * 0.35 + f.spectrumN[band] * 0.65;
+
 /** Logo uprostřed: tmavý kruh pod ním (kontrast) a mírně ztlumené, aby svítilo, ale šlo přečíst.
  *  faceCamera: kruh se natáčí ke kameře (kamera se dívá šikmo, logo je sprite – vždy čelem) */
 export function createLogo(scene: THREE.Scene, width = 18, y = 0, faceCamera?: THREE.Camera) {

@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import type { Effect } from '../engine';
 import { SPECTRUM_BANDS } from '../audioFeatures';
-import { createLogo, createSparks } from './common';
+import { createLogo, createSparks, levelOf } from './common';
 
 /**
  * Neon Equalizer – klasický ekvalizér zrcadlený od středu (basy uprostřed), odraz v „podlaze“,
@@ -17,7 +17,7 @@ export function createEqualizer(): Effect {
   const BARS = SPECTRUM_BANDS * 2;
   const WIDTH = 74;
   const step = WIDTH / BARS;
-  const MAX_H = 22;
+  const MAX_H = 24;
   const FLOOR = -8;
 
   const barGeo = new THREE.BoxGeometry(step * 0.5, 1, step * 0.5);
@@ -73,7 +73,7 @@ export function createEqualizer(): Effect {
     bloomStrength: (f) => 0.55 + f.pulse * 0.35,
     update(f, dt, t) {
       for (let i = 0; i < BARS; i++) {
-        const target = 0.15 + f.spectrum[bandOf(i)] ** 1.3 * MAX_H;
+        const target = 0.15 + levelOf(f, bandOf(i)) ** 1.15 * MAX_H;
         heights[i] += (target - heights[i]) * Math.min(1, dt * 20);
         const h = heights[i];
         const x = -WIDTH / 2 + (i + 0.5) * step;
@@ -91,13 +91,16 @@ export function createEqualizer(): Effect {
       mirror.instanceMatrix.needsUpdate = true;
       caps.instanceMatrix.needsUpdate = true;
 
-      floorLineMat.color.copy(cyan).lerp(white, f.pulse * 0.7);
+      floorLineMat.color.copy(cyan).lerp(white, f.pulse * 0.8);
+      // Na beat sloupce zjasní (barva > 1 → víc záře) a kamera „ťukne“
+      (bars.material as THREE.MeshBasicMaterial).color.setScalar(0.85 + f.pulse * 0.7);
+      camera.position.z = 70 - f.pulse * 5;
       logo.update(f);
 
       if (f.beat) {
         // Jiskry z nejvyšších sloupců
         for (let i = 0; i < BARS; i += 2) {
-          if (heights[i] < MAX_H * 0.35) continue;
+          if (heights[i] < MAX_H * 0.3) continue;
           const x = -WIDTH / 2 + (i + 0.5) * step;
           for (let k = 0; k < 3; k++) {
             sparks.emit(x, FLOOR + heights[i], 0, (Math.random() - 0.5) * 6, 10 + Math.random() * 18, (Math.random() - 0.5) * 6, 0.5 + (bandOf(i) / SPECTRUM_BANDS) * 0.38);
@@ -105,7 +108,7 @@ export function createEqualizer(): Effect {
         }
       }
       sparks.update(dt, 22);
-      grid.position.z = -30 + ((t * (6 + f.mid * 12)) % 4);
+      grid.position.z = -30 + ((t * (6 + f.midN * 20)) % 4);
 
       camera.position.x = Math.sin(t * 0.2) * 6;
       camera.position.y = 4 + Math.sin(t * 0.33) * 2;
