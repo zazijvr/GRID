@@ -22,3 +22,6 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Staré pomocné skripty a zálohy (mimo git)
+_stare/

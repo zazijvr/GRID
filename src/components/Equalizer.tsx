@@ -1,7 +1,8 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useState } from 'react';
+import { EQ_BANDS, setEqGains } from '../audio/audioGraph';
 
-// 10-pásmový equalizer – frekvence v Hz
-export const EQ_BANDS = [32, 64, 125, 250, 500, 1000, 2000, 4000, 8000, 16000] as const;
+// 10-pásmový ekvalizér – filtry jsou v audioGraph.ts, tady jen ovládání
+export { EQ_BANDS };
 
 export type EQGains = [number, number, number, number, number, number, number, number, number, number];
 
@@ -49,83 +50,46 @@ interface EqualizerProps {
 }
 
 const MAX_GAIN = 12;
+const EQ_KEY = 'zvr-grid-eq';
+
+/** Uložené nastavení ekvalizéru (kontrola tvaru – localStorage může obsahovat cokoli) */
+function readSavedEq(): { preset: EQPreset; gains: EQGains } {
+  const flat = { preset: 'flat' as EQPreset, gains: [...EQ_PRESETS.flat] as EQGains };
+  try {
+    const raw = JSON.parse(localStorage.getItem(EQ_KEY) || 'null');
+    const ok =
+      raw && raw.preset in PRESETS_META && Array.isArray(raw.gains) && raw.gains.length === EQ_BANDS.length &&
+      raw.gains.every((g: unknown) => typeof g === 'number' && Number.isFinite(g) && Math.abs(g) <= MAX_GAIN);
+    return ok ? { preset: raw.preset, gains: raw.gains as EQGains } : flat;
+  } catch {
+    return flat;
+  }
+}
 
 export function Equalizer({ audioRef, isOpen, onClose, onPresetChange }: EqualizerProps) {
-  const filtersRef = useRef<BiquadFilterNode[]>([]);
-  const [preset, setPreset]   = useState<EQPreset>('flat');
-  const [gains, setGains]     = useState<EQGains>([0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
+  const [{ preset, gains }, setEq] = useState(readSavedEq);
   const [dragging, setDragging] = useState<number | null>(null);
 
-  // Vytvoříme EQ filtry a zapojíme je do audio grafu
+  // Zesílení do zvukového grafu (platí i pro graf vytvořený později) + zapamatovat do příště
   useEffect(() => {
-    const checkInterval = setInterval(() => {
-      const audio = audioRef.current;
-      if (!audio) return;
-      // @ts-expect-error
-      if (audio.__audioCtx && !audio.__eqFilters) {
-        // @ts-expect-error
-        const ctx: AudioContext = audio.__audioCtx;
-        // @ts-expect-error
-        const analyser: AnalyserNode = audio.__analyser;
-        // @ts-expect-error
-        const silencer: GainNode = audio.__silencer;
-        if (!analyser || !silencer) return;
+    setEqGains(audioRef.current, gains);
+    try { localStorage.setItem(EQ_KEY, JSON.stringify({ preset, gains })); } catch { /* jen se nezapamatuje */ }
+  }, [audioRef, preset, gains]);
 
-        const filters = EQ_BANDS.map((freq, i) => {
-          const f = ctx.createBiquadFilter();
-          f.type = i === 0 ? 'lowshelf' : i === EQ_BANDS.length - 1 ? 'highshelf' : 'peaking';
-          f.frequency.value = freq;
-          f.Q.value = 1.4;
-          f.gain.value = 0;
-          return f;
-        });
-
-        // Přepojíme: analyser → filters[0..n] → silencer
-        try { analyser.disconnect(silencer); } catch {}
-        analyser.connect(filters[0]);
-        for (let i = 0; i < filters.length - 1; i++) filters[i].connect(filters[i + 1]);
-        filters[filters.length - 1].connect(silencer);
-
-        // @ts-expect-error
-        audio.__eqFilters = filters;
-        filtersRef.current = filters;
-        clearInterval(checkInterval);
-      }
-      // @ts-expect-error
-      if (audio.__eqFilters) {
-        // @ts-expect-error
-        filtersRef.current = audio.__eqFilters;
-        clearInterval(checkInterval);
-      }
-    }, 200);
-    return () => clearInterval(checkInterval);
-  }, [audioRef]);
-
-  const applyGains = (newGains: EQGains) => {
-    // @ts-expect-error
-    const filters: BiquadFilterNode[] = audioRef.current?.__eqFilters ?? filtersRef.current;
-    if (!filters?.length) return;
-    newGains.forEach((g, i) => { if (filters[i]) filters[i].gain.value = g; });
-  };
+  // Hlavička (tlačítko EQ) ukazuje uložený preset hned po startu
+  useEffect(() => { onPresetChange?.(preset); }, [preset, onPresetChange]);
 
   const selectPreset = (p: EQPreset) => {
-    setPreset(p);
-    onPresetChange?.(p);
-    if (p !== 'custom') {
-      const g = [...EQ_PRESETS[p]] as EQGains;
-      setGains(g);
-      applyGains(g);
-    }
+    setEq((prev) => ({ preset: p, gains: p === 'custom' ? prev.gains : ([...EQ_PRESETS[p]] as EQGains) }));
   };
 
   const setGain = (index: number, value: number) => {
     const clamped = Math.max(-MAX_GAIN, Math.min(MAX_GAIN, Math.round(value * 2) / 2));
-    const newGains = [...gains] as EQGains;
-    newGains[index] = clamped;
-    setGains(newGains);
-    setPreset('custom');
-    onPresetChange?.('custom');
-    applyGains(newGains);
+    setEq((prev) => {
+      const next = [...prev.gains] as EQGains;
+      next[index] = clamped;
+      return { preset: 'custom', gains: next };
+    });
   };
 
   // Drag handling pro slider

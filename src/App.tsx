@@ -1,10 +1,12 @@
-import React, { useRef, useState, useCallback } from 'react';
+import React, { useRef, useState, useCallback, lazy, Suspense } from 'react';
 import { 
   Play, Pause, SkipForward, SkipBack, Shuffle, Repeat, Repeat1, FolderPlus, FolderOpen, Trash2, Volume2, VolumeX, Minimize2, X, MonitorPlay 
 } from 'lucide-react';
 import { useAudioPlayer } from './hooks/useAudioPlayer';
+import { closeAudioGraph } from './audio/audioGraph';
 import { SpectrumVisualizer } from './components/SpectrumVisualizer';
-import { VisualizerStudio } from './components/VisualizerStudio';
+// three.js je velký – načte se až při otevření Visualizer Studia (rychlejší start přehrávače)
+const VisualizerStudio = lazy(() => import('./components/VisualizerStudio').then((m) => ({ default: m.VisualizerStudio })));
 import { Equalizer, EQButton } from './components/Equalizer';
 import type { EQPreset } from './components/Equalizer';
 
@@ -12,6 +14,9 @@ const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/
 
 const PLAYER_WIDTH  = 350; // px – šířka přehrávače
 const EQ_PANEL_WIDTH = 280; // px – šířka EQ panelu
+const isTauri = () => !!window.__TAURI_INTERNALS__;
+const tauriWindow = () => import('@tauri-apps/api/window').then((m) => m.getCurrentWindow());
+const ACCEPT_AUDIO = 'audio/*,.wav,.mp3,.flac,.ogg,.oga,.opus,.m4a,.aac,.wma,.weba,.webm';
 
 function App() {
   const {
@@ -53,15 +58,12 @@ function App() {
 
   // EQ panel toggle – otevření: nejdřív rozšíř okno, pak zobraz panel
   //                  zavření:  nejdřív skryj panel, pak po animaci zmenši okno
-  const resizeWindow = useCallback((width: number) => {
-    // @ts-expect-error window.__TAURI_INTERNALS__ is injected
-    if (!window.__TAURI_INTERNALS__) return Promise.resolve();
-    return Promise.all([
-      import('@tauri-apps/api/window'),
-      import('@tauri-apps/api/dpi'),
-    ]).then(([{ getCurrentWindow }, { LogicalSize }]) => {
-      return getCurrentWindow().setSize(new LogicalSize(width, 600));
-    });
+  // Mění jen šířku – výšku, kterou si uživatel nastavil, nechá
+  const resizeWindow = useCallback(async (width: number) => {
+    if (!isTauri() || isMobile) return;
+    const [win, { LogicalSize }] = await Promise.all([tauriWindow(), import('@tauri-apps/api/dpi')]);
+    const [size, scale] = await Promise.all([win.innerSize(), win.scaleFactor()]);
+    await win.setSize(new LogicalSize(width, size.height / scale));
   }, []);
 
   const toggleEQ = useCallback(() => {
@@ -102,37 +104,26 @@ function App() {
   };
 
   const closeWindow = () => {
-    if (audioRef.current) {
-      audioRef.current.pause();
-      // @ts-expect-error
-      if (audioRef.current.__audioCtx) audioRef.current.__audioCtx.close();
-    }
-    // @ts-expect-error window.__TAURI_INTERNALS__ is injected
-    if (window.__TAURI_INTERNALS__) {
-      import('@tauri-apps/api/window').then(m => m.getCurrentWindow().close());
-    } else {
-      window.close();
-    }
+    audioRef.current?.pause();
+    closeAudioGraph(audioRef.current);
+    if (isTauri()) tauriWindow().then((w) => w.close());
+    else window.close();
   };
 
   const minimizeWindow = () => {
-    // @ts-expect-error window.__TAURI_INTERNALS__ is injected
-    if (window.__TAURI_INTERNALS__) {
-      import('@tauri-apps/api/window').then(m => m.getCurrentWindow().minimize());
-    }
+    if (isTauri()) tauriWindow().then((w) => w.minimize());
   };
 
-  const startDragging = () => {
-    // @ts-expect-error window.__TAURI_INTERNALS__ is injected
-    if (window.__TAURI_INTERNALS__) {
-      import('@tauri-apps/api/window').then(m => m.getCurrentWindow().startDragging());
-    }
+  // Přesun okna za titulek – ne při kliknutí na tlačítka v něm (jinak by se místo akce chytlo okno)
+  const startDragging = (e: React.PointerEvent) => {
+    if (e.button !== 0 || (e.target as Element).closest('button')) return;
+    if (isTauri()) tauriWindow().then((w) => w.startDragging());
   };
 
   return (
     // Outer wrapper – flex-row pro player + EQ panel
     <div
-      className={`w-full h-full flex flex-row overflow-hidden transition-colors
+      className={`relative w-full h-full flex flex-row overflow-hidden transition-colors
         ${!isMobile ? 'border border-cyan-500/30 rounded-lg shadow-2xl' : ''}
         ${isDragging ? 'border-pink-500/80 shadow-[0_0_20px_rgba(248,0,255,0.4)]' : ''}
       `}
@@ -141,7 +132,7 @@ function App() {
       onDrop={handleDrop}
     >
       {/* ── LEFT COLUMN – PLAYER – fixní šířka aby EQ panel nevytlačil obsah ── */}
-      <div className="flex flex-col bg-slate-900/90 backdrop-blur-md overflow-hidden shrink-0" style={{ width: PLAYER_WIDTH }}>
+      <div className="flex flex-col bg-slate-900/90 backdrop-blur-md overflow-hidden shrink-0" style={{ width: isMobile ? '100%' : PLAYER_WIDTH }}>
 
         {/* Title Bar */}
         {!isMobile && (
@@ -325,7 +316,7 @@ function App() {
           <div
             className="flex items-center justify-center gap-3 w-full max-w-[240px] mx-auto opacity-70 hover:opacity-100 transition-opacity py-4 -my-4"
             onWheel={(e) => {
-              setVolume(Math.max(0, Math.min(1, volume + (e.deltaY < 0 ? 0.05 : -0.05))));
+              setVolume((v) => v + (e.deltaY < 0 ? 0.05 : -0.05));
             }}
           >
             <button onClick={toggleMute} className="text-slate-400 hover:text-cyan-400 transition-colors">
@@ -412,8 +403,8 @@ function App() {
 
         {/* Footer */}
         <div className="shrink-0 p-3 bg-slate-950 border-t border-white/5 flex gap-2">
-          <input type="file" multiple accept="audio/*,.wav,.mp3,.flac,.ogg,.m4a,.aac,.wma" className="hidden" ref={fileInputRef} onChange={handleFileChange} />
-          <input type="file" multiple accept="audio/*,.wav,.mp3,.flac,.ogg,.m4a,.aac,.wma" className="hidden" ref={fileInputOpenRef} onChange={handleFileOpen} />
+          <input type="file" multiple accept={ACCEPT_AUDIO} className="hidden" ref={fileInputRef} onChange={handleFileChange} />
+          <input type="file" multiple accept={ACCEPT_AUDIO} className="hidden" ref={fileInputOpenRef} onChange={handleFileOpen} />
 
           <button
             onClick={() => fileInputRef.current?.click()}
@@ -434,23 +425,29 @@ function App() {
       </div>
       {/* ── END LEFT COLUMN ── */}
 
-      {/* ── RIGHT COLUMN – EQ SIDE PANEL ── */}
-      <Equalizer
-        audioRef={audioRef}
-        isOpen={showEQ}
-        onClose={toggleEQ}
-        onPresetChange={setActivePreset}
-      />
+      {/* ── RIGHT COLUMN – EQ SIDE PANEL (telefon: přes přehrávač – vedle by byl mimo obrazovku) ── */}
+      {isMobile ? (
+        <div
+          className={showEQ ? 'absolute inset-0 z-40 flex justify-end bg-black/60' : 'hidden'}
+          onClick={(e) => { if (e.target === e.currentTarget) toggleEQ(); }}
+        >
+          <Equalizer audioRef={audioRef} isOpen onClose={toggleEQ} onPresetChange={setActivePreset} />
+        </div>
+      ) : (
+        <Equalizer audioRef={audioRef} isOpen={showEQ} onClose={toggleEQ} onPresetChange={setActivePreset} />
+      )}
 
       <audio ref={audioRef} preload="auto" className="hidden" />
 
       {/* Visualizer Studio Overlay */}
       {showVisualizer && (
-        <VisualizerStudio
-          audioRef={audioRef}
-          isPlaying={isPlaying}
-          onClose={() => setShowVisualizer(false)}
-        />
+        <Suspense fallback={null}>
+          <VisualizerStudio
+            audioRef={audioRef}
+            isPlaying={isPlaying}
+            onClose={() => setShowVisualizer(false)}
+          />
+        </Suspense>
       )}
     </div>
   );

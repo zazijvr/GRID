@@ -52,18 +52,31 @@ jobs:
           npx tauri android build --apk
 
       - name: Sign Release APK
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
         run: |
-          # Vygenerovani testovaciho klice uvnitr kontejneru pro podepsani aplikace GRID
-          keytool -genkey -v -keystore release.jks -keyalg RSA -keysize 2048 -validity 10000 -alias zazijvr -dname "CN=ZažijVR GRID" -storepass gridpass -keypass gridpass
-          
-          # Nalezeni nejnovejsi verze Android build-tools
+          # Stálý podpisový klíč ze secrets – jen tak se nová verze nainstaluje přes starou
+          # (jiný podpis = Android aktualizaci odmítne, uživatel musí odinstalovat a přijde o playlist).
+          if [ -n "$KEYSTORE_B64" ] && [ -n "$KEYSTORE_PASSWORD" ]; then
+            echo "$KEYSTORE_B64" | base64 -d > release.jks
+            ALIAS="${KEY_ALIAS:-zazijvr}"
+          else
+            echo "::warning::Chybí secrets ANDROID_KEYSTORE_BASE64 / ANDROID_KEYSTORE_PASSWORD – APK je podepsané DOČASNÝM klíčem a nepůjde nainstalovat jako aktualizace."
+            KEYSTORE_PASSWORD="$(openssl rand -hex 16)"
+            ALIAS=zazijvr
+            keytool -genkey -keystore release.jks -keyalg RSA -keysize 2048 -validity 10000 -alias "$ALIAS" \
+              -dname "CN=ZazijVR GRID" -storepass "$KEYSTORE_PASSWORD" -keypass "$KEYSTORE_PASSWORD"
+          fi
+          printf '%s' "$KEYSTORE_PASSWORD" > ks.pass
+
           BUILD_TOOLS=$(ls -d $ANDROID_HOME/build-tools/* | sort -V | tail -n 1)
-          
-          # Zipalign unsigned balicku
-          $BUILD_TOOLS/zipalign -v 4 src-tauri/gen/android/app/build/outputs/apk/universal/release/app-universal-release-unsigned.apk aligned.apk
-          
-          # Podepsani APK klicem, cimz vznika instlovatelne Release APK pro mobilni zarizeni
-          $BUILD_TOOLS/apksigner sign --ks release.jks --ks-key-alias zazijvr --ks-pass pass:gridpass --key-pass pass:gridpass --out zvr-grid-android-release.apk aligned.apk
+          $BUILD_TOOLS/zipalign -f -p 4 src-tauri/gen/android/app/build/outputs/apk/universal/release/app-universal-release-unsigned.apk aligned.apk
+          $BUILD_TOOLS/apksigner sign --ks release.jks --ks-key-alias "$ALIAS" --ks-pass file:ks.pass \
+            --out zvr-grid-android-release.apk aligned.apk
+          $BUILD_TOOLS/apksigner verify zvr-grid-android-release.apk
+          rm -f release.jks ks.pass aligned.apk
 
       - name: Publikace zkompilované verze do Release složky
         uses: softprops/action-gh-release@v2

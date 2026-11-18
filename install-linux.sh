@@ -1,5 +1,6 @@
 #!/bin/bash
-set -e
+set -euo pipefail
+GITHUB_TOKEN="${GITHUB_TOKEN:-}"
 
 echo "=========================================================="
 echo "🎧 Začínám bleskovou instalaci aplikace ZazijVR GRID"
@@ -46,10 +47,10 @@ if [ -z "$ASSET_ID" ]; then
         exit 1
     fi
     echo "📥 Stahuji veřejný AppImage z $ASSET_URL ..."
-    curl -L --progress-bar "$ASSET_URL" -o "$APP_PATH"
+    curl -fL --progress-bar "$ASSET_URL" -o "$APP_PATH"
 else
     echo "📥 Stahuji chráněný AppImage objekt z $ASSET_ID ..."
-    curl -L --progress-bar -H "Accept: application/octet-stream" "${AUTH_ARGS[@]}" "$ASSET_ID" -o "$APP_PATH"
+    curl -fL --progress-bar -H "Accept: application/octet-stream" "${AUTH_ARGS[@]}" "$ASSET_ID" -o "$APP_PATH"
 fi
 
 echo "📦 Rozbaluji bezpečný nativní kontejner z AppImage..."
@@ -63,7 +64,7 @@ FINAL_EXEC="$APP_DIR/zvr-grid"
 ICON_PATH="$APP_DIR/grid-icon.png"
 
 echo "🖼️ Stahuji ikonu napřímo k aplikaci..."
-curl -H "Authorization: token $GITHUB_TOKEN" -sL "https://raw.githubusercontent.com/zazijvr/GRID/main/public/GRID_icon_desktop.png" -o "$ICON_PATH"
+curl -sL "${AUTH_ARGS[@]}" "https://raw.githubusercontent.com/zazijvr/GRID/main/public/GRID_icon_desktop.png" -o "$ICON_PATH" || true
 
 echo "🔗 Vytvářím zástupce na ploše a v menu..."
 cat <<EOF > "$DESKTOP_DIR/zvr-grid.desktop"
