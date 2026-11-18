@@ -7,7 +7,7 @@ playlist, 10pásmový ekvalizér s presety a 3D Visualizer Studio.
 
 ```bash
 bun install
-bun run dev:linux      # Linux (WebKitGTK bez DMA-BUF – kvůli Nvidia)
+bun run dev:linux      # Linux (DMA-BUF podle sezení – viz src-tauri/src/main.rs)
 bun run tauri dev      # ostatní systémy
 ```
 

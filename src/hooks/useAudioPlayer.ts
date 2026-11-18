@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { ensureAudioGraph, fadeOut, getAudioGraph, restoreVolume, setGraphVolume } from '../audio/audioGraph';
+import { ensureAudioGraph, fadeOut, getAudioGraph, muteNow, restoreVolume, setGraphVolume, waitForDrain } from '../audio/audioGraph';
 import {
   blobToDataUrl, clearBlobs, deleteBlobs, getBlob, loadPlaylist, putBlobs, saveOrder, type TrackMeta,
 } from '../audio/trackStore';
@@ -49,6 +49,11 @@ export function useAudioPlayer() {
   const sessionFiles = useRef(new Map<string, Blob>());
   /** Číslo posledního požadavku na načtení – starší (rychlé přeskakování) se zahodí */
   const loadToken = useRef(0);
+  /** O kolik je currentTime napřed před slyšeným zvukem (s) – WebKitGTK dekóduje ~1 s dopředu.
+   *  Měří se při každé pauze (jak dlouho ještě teče zvuk); jinde (Windows) vyjde ~0. */
+  const lagRef = useRef(0);
+  /** Pozice v okamžiku pauzy – při pokračování se vrátí o lagRef (ztlumené zbytky nikdo neslyšel) */
+  const pausedAtRef = useRef<number | null>(null);
   /** Připravené data: URL (aktuální a následující skladba) – přepnutí bez čekání na převod */
   const urlCache = useRef(new Map<string, Promise<string>>());
 
@@ -135,6 +140,7 @@ export function useAudioPlayer() {
     if (!audio || !track) return;
 
     const token = ++loadToken.current;
+    pausedAtRef.current = null;
     commitIndex(index);
     setCurrentTime(0);
     setDuration(0);
@@ -195,11 +201,20 @@ export function useAudioPlayer() {
       if (Number.isFinite(audio.duration) && audio.duration > 0) setDuration(audio.duration);
     };
     // GStreamer (Linux) hlásí u data: URL zpočátku délku Infinity – doplní se později
+    // Zobrazuje se slyšená pozice (currentTime je o rezervu napřed)
     const onTimeUpdate = () => {
-      setCurrentTime(audio.currentTime);
+      setCurrentTime(Math.max(0, audio.currentTime - (getAudioGraph(audio) ? lagRef.current : 0)));
       syncDuration();
     };
-    const onEnded = () => {
+    const onEnded = async () => {
+      // Konec hlásí přehrávač, když je v rezervě ještě ~1 s zvuku; přepnutí skladby by ji zahodilo
+      // (každé skladbě by chyběl konec) – nejdřív nechat dohrát
+      const graph = getAudioGraph(audio);
+      if (graph) {
+        const token = loadToken.current;
+        await waitForDrain(graph, 2500);
+        if (token !== loadToken.current) return; // mezitím uživatel přepnul / spustil něco jiného
+      }
       if (repeatModeRef.current === 'one') {
         audio.currentTime = 0;
         audio.play().catch(() => setIsPlaying(false));
@@ -278,11 +293,27 @@ export function useAudioPlayer() {
       return;
     }
     if (audio.paused) {
-      ensureAudioGraph(audio);
+      const graph = ensureAudioGraph(audio);
+      // Ztlumený zbytek rezervy se při pauze neslyšel → vrátit se o něj, ať nic nepřeskočí
+      if (graph && pausedAtRef.current !== null && Math.abs(audio.currentTime - pausedAtRef.current) < 0.05 && lagRef.current > 0.05) {
+        audio.currentTime = Math.max(0, pausedAtRef.current - lagRef.current);
+      }
+      pausedAtRef.current = null;
+      if (graph) restoreVolume(graph);
       audio.play().then(() => setIsPlaying(true)).catch((e) => console.warn('Přehrání se nepodařilo', e));
+      setIsPlaying(true);
     } else {
+      // Pauza okamžitě: ztlumit konec řetězce (rezerva by jinak ještě ~1 s hrála) a změřit rezervu
+      const graph = getAudioGraph(audio);
+      if (graph) muteNow(graph);
+      pausedAtRef.current = audio.currentTime;
       audio.pause();
       setIsPlaying(false);
+      if (graph) {
+        waitForDrain(graph, 2500).then((ms) => {
+          if (ms > 30 && ms < 2400) lagRef.current = ms / 1000;
+        });
+      }
     }
   };
 
@@ -317,6 +348,7 @@ export function useAudioPlayer() {
   const seek = (seconds: number) => {
     const audio = audioRef.current;
     if (!audio || !Number.isFinite(seconds)) return;
+    pausedAtRef.current = null; // posun zahodí rezervu – při pokračování se už nevrací
     audio.currentTime = seconds;
     setCurrentTime(seconds);
   };

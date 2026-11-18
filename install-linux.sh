@@ -71,7 +71,7 @@ cat <<EOF > "$DESKTOP_DIR/zvr-grid.desktop"
 [Desktop Entry]
 Name=Zažij VR GRID
 Comment=Hudební přehrávač GRID
-Exec=env WEBKIT_DISABLE_DMABUF_RENDERER=1 $FINAL_EXEC
+Exec=$FINAL_EXEC
 Icon=$ICON_PATH
 Terminal=false
 Type=Application

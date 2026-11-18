@@ -98,6 +98,38 @@ export function fadeOut(graph: AudioGraph) {
   g.setTargetAtTime(0, t, 0.008);
 }
 
+/** Okamžité ztlumení (pauza) – změna gainu je slyšet do pár ms */
+export function muteNow(graph: AudioGraph) {
+  const g = graph.gain.gain;
+  const t = graph.ctx.currentTime;
+  g.cancelScheduledValues(t);
+  g.setValueAtTime(g.value, t);
+  g.linearRampToValueAtTime(0, t + 0.012);
+}
+
+/**
+ * Počká, až do grafu přestane téct zvuk, a vrátí za kolik ms.
+ * WebKitGTK (Linux) si dekóduje ~1 s zvuku dopředu: po pause() ho ještě posílá do grafu
+ * a currentTime je o tu dobu napřed před tím, co je slyšet. Jinde (Windows) je to ~0.
+ */
+export function waitForDrain(graph: AudioGraph, maxMs = 2500): Promise<number> {
+  const buf = new Float32Array(graph.analyser.fftSize);
+  const t0 = performance.now();
+  return new Promise((resolve) => {
+    let quiet = 0;
+    const tick = () => {
+      graph.analyser.getFloatTimeDomainData(buf);
+      let sum = 0;
+      for (let i = 0; i < buf.length; i++) sum += buf[i] * buf[i];
+      const elapsed = performance.now() - t0;
+      quiet = Math.sqrt(sum / buf.length) < 0.002 ? quiet + 1 : 0;
+      if (quiet >= 2 || elapsed >= maxMs) resolve(elapsed);
+      else setTimeout(tick, 25);
+    };
+    tick();
+  });
+}
+
 /** Vrátí hlasitost na nastavenou hodnotu (po přepnutí skladby) */
 export function restoreVolume(graph: AudioGraph) {
   const g = graph.gain.gain;
