@@ -1,7 +1,8 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { ensureAudioGraph, fadeOut, getAudioGraph, muteNow, restoreVolume, setGraphVolume, waitForDrain } from '../audio/audioGraph';
 import {
-  clearBlobs, deleteBlobs, getBlob, loadPlaylist, playableUrl, putBlobs, releaseUrl, saveOrder, type TrackMeta,
+  deleteBlobs, getBlob, loadPlaylist, loadSavedPlaylists, playableUrl, putBlobs, releaseUrl, saveOrder, writeSavedPlaylists,
+  type SavedPlaylist, type TrackMeta,
 } from '../audio/trackStore';
 
 export type Track = TrackMeta;
@@ -38,6 +39,10 @@ export function useAudioPlayer() {
   const [shuffle, setShuffle] = useState(false);
   const [volume, setVolumeState] = useState(readVolume);
   const [isLoaded, setIsLoaded] = useState(false);
+  const [savedPlaylists, setSavedPlaylists] = useState<SavedPlaylist[]>([]);
+  /** Název uloženého playlistu, ze kterého je aktuální fronta (null = neuložený výběr) */
+  const [currentPlaylistName, setCurrentPlaylistName] = useState<string | null>(null);
+  const savedRef = useRef<SavedPlaylist[]>([]);
 
   // Aktuální hodnoty pro posluchače událostí (bez opakované registrace)
   const tracksRef = useRef<Track[]>([]);
@@ -70,13 +75,34 @@ export function useAudioPlayer() {
     setCurrentIndex(index);
   }, []);
 
-  // Playlist z minula
+  // Playlist z minula + uložené playlisty
   useEffect(() => {
     loadPlaylist().then((saved) => {
       if (saved.length > 0) commitTracks(saved);
       setIsLoaded(true);
     });
+    loadSavedPlaylists().then((list) => {
+      savedRef.current = list;
+      setSavedPlaylists(list);
+    });
+    try { setCurrentPlaylistName(localStorage.getItem('zvr-grid-current-playlist')); } catch { /* jen se nezapamatuje */ }
   }, [commitTracks]);
+
+  useEffect(() => {
+    try {
+      if (currentPlaylistName) localStorage.setItem('zvr-grid-current-playlist', currentPlaylistName);
+      else localStorage.removeItem('zvr-grid-current-playlist');
+    } catch { /* jen se nezapamatuje */ }
+  }, [currentPlaylistName]);
+
+  /** Smaže soubory skladeb, které už nepoužívá fronta ani žádný uložený playlist */
+  const releaseFiles = useCallback((candidateIds: string[], queue: Track[] = tracksRef.current) => {
+    const used = new Set(queue.map((t) => t.id));
+    for (const p of savedRef.current) for (const t of p.tracks) used.add(t.id);
+    const unused = candidateIds.filter((id) => !used.has(id));
+    unused.forEach((id) => sessionFiles.current.delete(id));
+    deleteBlobs(unused);
+  }, []);
 
   // Ukládá se jen pořadí a názvy (soubory se uloží jednou při přidání)
   useEffect(() => {
@@ -275,12 +301,13 @@ export function useAudioPlayer() {
   const openFiles = async (files: File[]) => {
     if (!files.some(isAudioFile)) return;
     stopAudio();
-    sessionFiles.current.clear();
     urlCache.current.forEach(releaseUrl);
     urlCache.current.clear();
-    await clearBlobs();
+    const oldIds = tracksRef.current.map((t) => t.id);
     const added = await importFiles(files);
     commitTracks(added);
+    setCurrentPlaylistName(null);
+    releaseFiles(oldIds, added); // staré soubory jen když nejsou v uloženém playlistu
     commitIndex(-1);
     if (added.length > 0) loadAndPlay(0, true);
   };
@@ -371,8 +398,7 @@ export function useAudioPlayer() {
     const next = list.filter((_, i) => i !== index);
     const curr = currentIndexRef.current;
     commitTracks(next);
-    sessionFiles.current.delete(removed.id);
-    deleteBlobs([removed.id]);
+    releaseFiles([removed.id], next);
 
     if (index === curr) {
       if (next.length === 0) {
@@ -401,7 +427,57 @@ export function useAudioPlayer() {
     setVolume(isMuted ? previousVolumeRef.current || 1 : 0);
   }, [isMuted, setVolume]);
 
+  // ───────── Uložené playlisty ─────────
+
+  const persistSaved = (list: SavedPlaylist[]) => {
+    savedRef.current = list;
+    setSavedPlaylists(list);
+    writeSavedPlaylists(list).catch((e) => console.warn('Playlisty se nepodařilo uložit', e));
+  };
+
+  /** Uloží aktuální frontu pod názvem; stejný název = aktualizace uloženého playlistu */
+  const savePlaylistAs = (rawName: string) => {
+    const name = rawName.trim().slice(0, 80);
+    if (!name || tracksRef.current.length === 0) return;
+    const tracks = tracksRef.current.map(({ id, name: n }) => ({ id, name: n }));
+    const existing = savedRef.current.find((p) => p.name.toLowerCase() === name.toLowerCase());
+    const old = existing?.tracks.map((t) => t.id) ?? [];
+    const entry: SavedPlaylist = { id: existing?.id ?? crypto.randomUUID(), name, tracks, updatedAt: Date.now() };
+    persistSaved([entry, ...savedRef.current.filter((p) => p !== existing)]);
+    setCurrentPlaylistName(name);
+    if (old.length) releaseFiles(old);
+  };
+
+  /** Načte uložený playlist do fronty a pustí první skladbu */
+  const loadSavedPlaylist = (id: string) => {
+    const p = savedRef.current.find((x) => x.id === id);
+    if (!p || p.tracks.length === 0) return;
+    const oldIds = tracksRef.current.map((t) => t.id);
+    stopAudio();
+    urlCache.current.forEach(releaseUrl);
+    urlCache.current.clear();
+    const next = p.tracks.map((t) => ({ ...t }));
+    commitTracks(next);
+    commitIndex(-1);
+    setCurrentPlaylistName(p.name);
+    releaseFiles(oldIds, next);
+    loadAndPlay(0, true);
+  };
+
+  const deleteSavedPlaylist = (id: string) => {
+    const p = savedRef.current.find((x) => x.id === id);
+    if (!p) return;
+    persistSaved(savedRef.current.filter((x) => x.id !== id));
+    if (currentPlaylistName === p.name) setCurrentPlaylistName(null);
+    releaseFiles(p.tracks.map((t) => t.id));
+  };
+
   return {
+    savedPlaylists,
+    currentPlaylistName,
+    savePlaylistAs,
+    loadSavedPlaylist,
+    deleteSavedPlaylist,
     tracks,
     currentTrack: tracks[currentIndex] ?? null,
     currentIndex,

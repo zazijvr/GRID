@@ -111,6 +111,41 @@ export async function saveOrder(tracks: TrackMeta[]) {
   }
 }
 
+/** Uložený playlist – odkazuje na soubory skladeb v BLOB_STORE (soubor se smaže, až ho nic nepoužívá) */
+export interface SavedPlaylist {
+  id: string;
+  name: string;
+  tracks: TrackMeta[];
+  updatedAt: number;
+}
+const SAVED_KEY = 'playlists';
+
+export async function loadSavedPlaylists(): Promise<SavedPlaylist[]> {
+  try {
+    const db = await openDB();
+    const raw = await request(db.transaction(META_STORE, 'readonly').objectStore(META_STORE).get(SAVED_KEY));
+    if (!Array.isArray(raw)) return [];
+    return raw
+      .filter((p): p is SavedPlaylist => typeof p?.id === 'string' && typeof p?.name === 'string' && Array.isArray(p?.tracks))
+      .map((p) => ({
+        id: p.id,
+        name: p.name.slice(0, 80),
+        updatedAt: Number(p.updatedAt) || 0,
+        tracks: p.tracks.filter((t: TrackMeta) => typeof t?.id === 'string' && typeof t?.name === 'string'),
+      }));
+  } catch (e) {
+    console.warn('Playlisty se nepodařilo načíst', e);
+    return [];
+  }
+}
+
+export async function writeSavedPlaylists(list: SavedPlaylist[]) {
+  const db = await openDB();
+  const tx = db.transaction(META_STORE, 'readwrite');
+  tx.objectStore(META_STORE).put(list, SAVED_KEY);
+  await done(tx);
+}
+
 export async function putBlobs(entries: Array<{ id: string; blob: Blob }>) {
   if (entries.length === 0) return;
   const db = await openDB();

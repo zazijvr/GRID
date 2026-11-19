@@ -1,12 +1,13 @@
 import React, { useRef, useState, useCallback, useEffect, lazy, Suspense } from 'react';
-import { 
-  Play, Pause, SkipForward, SkipBack, Shuffle, Repeat, Repeat1, FolderPlus, FolderOpen, Trash2, Volume2, VolumeX, Minimize2, X, MonitorPlay 
+import {
+  Play, Pause, SkipForward, SkipBack, Shuffle, Repeat, Repeat1, FolderPlus, FolderOpen, Trash2, Volume2, VolumeX, Minimize2, X, MonitorPlay, Library
 } from 'lucide-react';
 import { useAudioPlayer } from './hooks/useAudioPlayer';
 import { closeAudioGraph } from './audio/audioGraph';
 import { startDrag } from './utils/drag';
 import { SplashScreen } from './components/SplashScreen';
 import { MobileLayout, type MobileSheet } from './components/MobileLayout';
+import { PlaylistsPanel } from './components/PlaylistsPanel';
 import { isAndroidApp, openWebsiteAndroid, postPlaybackState, setImmersive } from './platform/android';
 import { SpectrumVisualizer } from './components/SpectrumVisualizer';
 // three.js je velký – načte se až při otevření Visualizer Studia (rychlejší start přehrávače)
@@ -49,7 +50,12 @@ function App() {
     setVolume,
     isMuted,
     toggleMute,
-    audioRef
+    audioRef,
+    savedPlaylists,
+    currentPlaylistName,
+    savePlaylistAs,
+    loadSavedPlaylist,
+    deleteSavedPlaylist,
   } = useAudioPlayer();
 
   const fileInputRef     = useRef<HTMLInputElement>(null);
@@ -59,6 +65,8 @@ function App() {
   const [showEQ,         setShowEQ]        = useState(false);
   /** Telefon: otevřený vysouvací panel (seznam skladeb / ekvalizér) */
   const [mobileSheet, setMobileSheet] = useState<MobileSheet>('none');
+  /** Počítač: místo seznamu skladeb panel uložených playlistů */
+  const [showPlaylists, setShowPlaylists] = useState(false);
   /** Úvodní animace při spuštění */
   const [showSplash, setShowSplash] = useState(true);
   /** Visualizer přes celý monitor (celá obrazovka okna) */
@@ -306,6 +314,11 @@ function App() {
           repeatMode={repeatMode}
           onToggleShuffle={toggleShuffle}
           onCycleRepeat={cycleRepeat}
+          savedPlaylists={savedPlaylists}
+          currentPlaylistName={currentPlaylistName}
+          onSavePlaylist={savePlaylistAs}
+          onLoadPlaylist={loadSavedPlaylist}
+          onDeletePlaylist={deleteSavedPlaylist}
         />
         <audio ref={audioRef} preload="auto" className="hidden" />
         {showSplash && <SplashScreen onDone={() => setShowSplash(false)} />}
@@ -569,8 +582,31 @@ function App() {
           </div>
         </div>
 
+        {/* Uložené playlisty (místo seznamu skladeb) */}
+        {showPlaylists && (
+          <div className="flex-1 min-h-0 flex flex-col bg-slate-900 border-t border-white/5">
+            <div className="shrink-0 flex items-center justify-between px-4 py-2.5">
+              <span className="text-xs font-bold uppercase tracking-[0.2em] text-cyan-400">Playlisty</span>
+              <button onClick={() => setShowPlaylists(false)} className="p-1 text-slate-500 hover:text-pink-400" aria-label="Zpět na seznam skladeb">
+                <X size={14} />
+              </button>
+            </div>
+            <PlaylistsPanel
+              saved={savedPlaylists}
+              currentName={currentPlaylistName}
+              trackCount={tracks.length}
+              onSave={savePlaylistAs}
+              onLoad={(id) => { loadSavedPlaylist(id); setShowPlaylists(false); }}
+              onDelete={deleteSavedPlaylist}
+            />
+          </div>
+        )}
+
         {/* Playlist */}
-        <div className="flex-1 overflow-y-auto bg-slate-900 p-2 border-t border-white/5 relative">
+        <div className={`flex-1 overflow-y-auto bg-slate-900 p-2 border-t border-white/5 relative ${showPlaylists ? 'hidden' : ''}`}>
+          {currentPlaylistName && tracks.length > 0 && (
+            <div className="px-3 pb-1.5 text-[10px] uppercase tracking-[0.2em] text-pink-400/80 truncate">{currentPlaylistName}</div>
+          )}
           {tracks.length === 0 ? (
             <div className="h-full flex flex-col items-center justify-center text-slate-500 text-sm gap-4 p-8 text-center pt-10">
               <FolderPlus size={36} className="text-slate-700" />
@@ -626,6 +662,15 @@ function App() {
           >
             <FolderOpen size={15} className="drop-shadow-[0_0_5px_currentColor]" />
             Otevřít
+          </button>
+
+          <button
+            onClick={() => setShowPlaylists((v) => !v)}
+            title="Uložené playlisty"
+            aria-pressed={showPlaylists}
+            className={`shrink-0 flex items-center justify-center px-3 rounded-md border transition-all duration-300 ${showPlaylists ? 'border-pink-500 text-pink-400 bg-pink-500/10' : 'border-slate-700 bg-slate-900 text-slate-300 hover:border-cyan-500/60 hover:text-cyan-400'}`}
+          >
+            <Library size={16} />
           </button>
         </div>
       </div>

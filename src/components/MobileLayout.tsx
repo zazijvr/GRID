@@ -1,5 +1,7 @@
 import React, { lazy, Suspense, useRef } from 'react';
-import { FolderOpen, FolderPlus, ListMusic, Music, Trash2, X } from 'lucide-react';
+import { FolderOpen, FolderPlus, Library, ListMusic, Music, Trash2, X } from 'lucide-react';
+import { PlaylistsPanel } from './PlaylistsPanel';
+import type { SavedPlaylist } from '../audio/trackStore';
 import type { Track } from '../hooks/useAudioPlayer';
 import { Equalizer, type EQPreset } from './Equalizer';
 import { DancingMascot } from '../mascot/DancingMascot';
@@ -9,7 +11,7 @@ import { DancingMascot } from '../mascot/DancingMascot';
 
 const VisualizerStudio = lazy(() => import('./VisualizerStudio').then((m) => ({ default: m.VisualizerStudio })));
 
-export type MobileSheet = 'none' | 'playlist' | 'eq' | 'music';
+export type MobileSheet = 'none' | 'playlist' | 'eq' | 'music' | 'playlists';
 
 const ACCEPT_AUDIO = 'audio/*,.wav,.mp3,.flac,.ogg,.oga,.opus,.m4a,.aac,.wma,.weba,.webm';
 
@@ -41,6 +43,11 @@ interface MobileLayoutProps {
   repeatMode: 'none' | 'all' | 'one';
   onToggleShuffle: () => void;
   onCycleRepeat: () => void;
+  savedPlaylists: SavedPlaylist[];
+  currentPlaylistName: string | null;
+  onSavePlaylist: (name: string) => void;
+  onLoadPlaylist: (id: string) => void;
+  onDeletePlaylist: (id: string) => void;
 }
 
 /** Vysouvací panel zespodu; zavře se tahem dolů za úchyt, klepnutím vedle nebo tlačítkem Zpět */
@@ -148,6 +155,19 @@ export function MobileLayout(p: MobileLayoutProps) {
     </>
   );
 
+  const playlistsSheet = (
+    <BottomSheet open={p.sheet === 'playlists'} onClose={() => p.setSheet('none')} height="72%" title="Moje playlisty">
+      <PlaylistsPanel
+        saved={p.savedPlaylists}
+        currentName={p.currentPlaylistName}
+        trackCount={p.tracks.length}
+        onSave={p.onSavePlaylist}
+        onLoad={(id) => { p.onLoadPlaylist(id); p.setSheet('none'); }}
+        onDelete={p.onDeletePlaylist}
+      />
+    </BottomSheet>
+  );
+
   // ── Prázdný playlist: uvítání ──
   if (p.tracks.length === 0) {
     return (
@@ -157,6 +177,7 @@ export function MobileLayout(p: MobileLayoutProps) {
       >
         {inputs}
         <div className="absolute left-3" style={{ top: 'calc(env(safe-area-inset-top, 0px) + 10px)' }}>{logo}</div>
+        {playlistsSheet}
         <DancingMascot className="w-48 h-48" />
         <div>
           <div className="text-2xl font-black tracking-[0.35em] text-white drop-shadow-[0_0_12px_rgba(0,243,255,0.8)]">GRID</div>
@@ -168,6 +189,11 @@ export function MobileLayout(p: MobileLayoutProps) {
         >
           <FolderPlus size={20} /> Přidat hudbu
         </button>
+        {p.savedPlaylists.length > 0 && (
+          <button onClick={() => p.setSheet('playlists')} className="flex items-center gap-2 text-sm text-purple-300 active:scale-95">
+            <Library size={18} /> Moje playlisty ({p.savedPlaylists.length})
+          </button>
+        )}
       </div>
     );
   }
@@ -207,7 +233,7 @@ export function MobileLayout(p: MobileLayoutProps) {
         open={p.sheet === 'playlist'}
         onClose={() => p.setSheet('none')}
         height="72%"
-        title={<>Seznam skladeb <span className="text-slate-500 font-normal">· {p.tracks.length}</span></>}
+        title={<>{p.currentPlaylistName ?? 'Seznam skladeb'} <span className="text-slate-500 font-normal">· {p.tracks.length}</span></>}
       >
         <div className="flex-1 overflow-y-auto px-2">
           {p.tracks.map((t, i) => {
@@ -256,11 +282,25 @@ export function MobileLayout(p: MobileLayoutProps) {
               <span className="block text-xs text-slate-400 mt-0.5">Současný playlist se smaže a nahradí vybranými skladbami</span>
             </span>
           </button>
+          <button
+            onClick={() => p.setSheet('playlists')}
+            className="flex items-center gap-4 p-4 rounded-2xl border border-purple-500/40 bg-purple-500/10 text-left active:scale-[0.98]"
+          >
+            <Library size={26} className="text-purple-300 shrink-0" />
+            <span>
+              <span className="block text-sm font-bold text-purple-200 uppercase tracking-wider">Moje playlisty</span>
+              <span className="block text-xs text-slate-400 mt-0.5">
+                Uložit aktuální výběr nebo pustit uložený{p.savedPlaylists.length ? ` (${p.savedPlaylists.length})` : ''}
+              </span>
+            </span>
+          </button>
           <button onClick={() => p.setSheet('none')} className="py-3 rounded-xl text-sm font-semibold text-slate-400 active:bg-white/5">
             Zrušit
           </button>
         </div>
       </BottomSheet>
+
+      {playlistsSheet}
 
       <BottomSheet open={p.sheet === 'eq'} onClose={() => p.setSheet('none')} height="58%" title="Ekvalizér">
         <Equalizer audioRef={p.audioRef} isOpen embedded onClose={() => p.setSheet('none')} onPresetChange={p.onPresetChange} />
