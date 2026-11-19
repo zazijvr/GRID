@@ -80,3 +80,14 @@ Ikonu a hlavní grafiku lze přegenerovat: `python3 scripts/gen-store-assets.py`
 - Sdílí data s třetími stranami? **Ne**
 - (Aplikace nemá síťovou komunikaci; skladby a playlisty jsou uložené jen v telefonu,
   zálohování do cloudu je vypnuté.)
+
+## Skládací telefony a tablety (`store/screenshots-skladaci/`)
+
+Play Console chce u skládacích zařízení aspoň 1 snímek rozloženého displeje v poměru 1:1 a 4:3
+a 1 snímek složeného telefonu na výšku v poměru 10:16:
+
+| Poměr | Soubory | Rozměr |
+|-------|---------|--------|
+| 1:1 (rozložený) | `1x1-*.png` | 1760 × 1760 |
+| 4:3 (rozložený) | `4x3-*.png` | 2048 × 1536 |
+| 10:16 (složený, na výšku) | `10x16-*.png` | 1080 × 1728 |
