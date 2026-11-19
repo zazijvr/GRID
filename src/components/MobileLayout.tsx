@@ -37,6 +37,10 @@ interface MobileLayoutProps {
   onOpenFiles: (files: File[]) => void;
   onPresetChange: (p: EQPreset) => void;
   onOpenWebsite: () => void;
+  shuffle: boolean;
+  repeatMode: 'none' | 'all' | 'one';
+  onToggleShuffle: () => void;
+  onCycleRepeat: () => void;
 }
 
 /** Vysouvací panel zespodu; zavře se tahem dolů za úchyt, klepnutím vedle nebo tlačítkem Zpět */
@@ -192,6 +196,10 @@ export function MobileLayout(p: MobileLayoutProps) {
           topLeft={logo}
           bottomBar={bottomBar}
           dimmed={p.sheet !== 'none'}
+          shuffle={p.shuffle}
+          repeatMode={p.repeatMode}
+          onToggleShuffle={p.onToggleShuffle}
+          onCycleRepeat={p.onCycleRepeat}
         />
       </Suspense>
 

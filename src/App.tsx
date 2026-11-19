@@ -302,6 +302,10 @@ function App() {
           onOpenFiles={(f) => { openFiles(f); setMobileSheet('none'); }}
           onPresetChange={setActivePreset}
           onOpenWebsite={openWebsite}
+          shuffle={shuffle}
+          repeatMode={repeatMode}
+          onToggleShuffle={toggleShuffle}
+          onCycleRepeat={cycleRepeat}
         />
         <audio ref={audioRef} preload="auto" className="hidden" />
         {showSplash && <SplashScreen onDone={() => setShowSplash(false)} />}

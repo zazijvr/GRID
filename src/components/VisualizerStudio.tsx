@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { X, Maximize, Minimize, ChevronLeft, ChevronRight, Shuffle, Play, Pause, SkipBack, SkipForward, Volume2, VolumeX } from 'lucide-react';
+import { X, Maximize, Minimize, ChevronLeft, ChevronRight, Shuffle, Repeat, Repeat1, Sparkles, Play, Pause, SkipBack, SkipForward, Volume2, VolumeX } from 'lucide-react';
 import { getAudioGraph } from '../audio/audioGraph';
 import { startDrag } from '../utils/drag';
 import { AudioAnalyzer } from '../visualizer/audioFeatures';
@@ -42,6 +42,11 @@ interface VisualizerStudioProps {
   bottomBar?: React.ReactNode;
   /** Přes visualizer je otevřený panel – ztlumit a kreslit méně často (baterie) */
   dimmed?: boolean;
+  /** Telefon: náhodné pořadí a opakování (jinak jsou v přehrávači vedle) */
+  shuffle?: boolean;
+  repeatMode?: 'none' | 'all' | 'one';
+  onToggleShuffle?: () => void;
+  onCycleRepeat?: () => void;
 }
 
 const EFFECTS: Array<() => Effect> = [createRing, createWave, createEqualizer, createHex, createLasers, createGalaxy];
@@ -61,7 +66,7 @@ const readSettings = (): { effect: number; auto: boolean } => {
 
 const formatTime = (s: number) => (Number.isFinite(s) && s > 0 ? `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}` : '0:00');
 
-export function VisualizerStudio({ audioRef, isPlaying, trackName, currentTime, duration, onClose, docked = false, onDragStart, side = 'left', fullscreen = false, onFullscreen, volume, onTogglePlay, onNext, onPrev, onSeek, onVolume, mobile = false, topLeft, bottomBar, dimmed = false }: VisualizerStudioProps) {
+export function VisualizerStudio({ audioRef, isPlaying, trackName, currentTime, duration, onClose, docked = false, onDragStart, side = 'left', fullscreen = false, onFullscreen, volume, onTogglePlay, onNext, onPrev, onSeek, onVolume, mobile = false, topLeft, bottomBar, dimmed = false, shuffle = false, repeatMode = 'none', onToggleShuffle, onCycleRepeat }: VisualizerStudioProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const engineRef = useRef<VisualizerEngine | null>(null);
@@ -252,7 +257,7 @@ export function VisualizerStudio({ audioRef, isPlaying, trackName, currentTime, 
             title={`Střídat efekty každých ${AUTO_CYCLE_S} s (A)`}
             className={`${btn} ${autoCycle ? '!text-pink-400 !border-pink-500/60 shadow-[0_0_15px_rgba(248,0,255,0.45)]' : ''}`}
           >
-            <Shuffle size={24} />
+            <Sparkles size={24} />
           </button>
           {/* Telefon: visualizer už je přes celou obrazovku – tlačítko by jen schovávalo lišty */}
           {!mobile && (
@@ -301,7 +306,15 @@ export function VisualizerStudio({ audioRef, isPlaying, trackName, currentTime, 
 
             {showControls && mobile && (
               <>
-                <div className="mt-4 flex items-center justify-center gap-8">
+                <div className="mt-4 flex items-center justify-between">
+                  <button
+                    onClick={onToggleShuffle}
+                    title="Náhodné pořadí"
+                    aria-pressed={shuffle}
+                    className={`p-2.5 rounded-full transition-all ${shuffle ? 'text-pink-400 bg-pink-500/15 shadow-[0_0_14px_rgba(248,0,255,0.45)]' : 'text-slate-400'}`}
+                  >
+                    <Shuffle size={20} />
+                  </button>
                   <button onClick={onPrev} title="Předchozí" className={ctrlBtn}><SkipBack size={26} fill="currentColor" /></button>
                   <button
                     onClick={onTogglePlay}
@@ -311,6 +324,14 @@ export function VisualizerStudio({ audioRef, isPlaying, trackName, currentTime, 
                     {isPlaying ? <Pause size={28} fill="currentColor" /> : <Play size={28} fill="currentColor" className="ml-1" />}
                   </button>
                   <button onClick={onNext} title="Další" className={ctrlBtn}><SkipForward size={26} fill="currentColor" /></button>
+                  <button
+                    onClick={onCycleRepeat}
+                    title={repeatMode === 'one' ? 'Opakovat skladbu' : repeatMode === 'all' ? 'Opakovat playlist' : 'Opakování vypnuto'}
+                    aria-pressed={repeatMode !== 'none'}
+                    className={`p-2.5 rounded-full transition-all ${repeatMode !== 'none' ? 'text-cyan-300 bg-cyan-400/15 shadow-[0_0_14px_rgba(0,243,255,0.45)]' : 'text-slate-400'}`}
+                  >
+                    {repeatMode === 'one' ? <Repeat1 size={20} /> : <Repeat size={20} />}
+                  </button>
                 </div>
                 <div className="mt-3 flex items-center gap-3">
                   <button onClick={() => onVolume((v) => (v > 0 ? 0 : lastVolume.current))} title="Ztlumit" className="text-slate-300 p-1">
