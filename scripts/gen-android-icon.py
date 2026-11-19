@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""Ikona Android aplikace GRID – VR panáček se sluchátky (rodina ikon s Moje Károu a e-mailem).
+"""Ikona Android aplikace GRID – hlava VR panáčka se sluchátky (jako původní logo) (rodina ikon s Moje Károu a e-mailem).
 
 Tvary bere ze src/mascot/gridMascot.ts (stejné jako úvodní animace), vykreslí je rsvg-convert
 a složí s tmavě modrým pozadím do src-tauri/icons/android/* (adaptivní ikona + klasické).
 Spuštění: python3 scripts/gen-android-icon.py   (potřebuje bun, rsvg-convert, Pillow)
 """
 import math, pathlib, subprocess, tempfile
-from PIL import Image, ImageDraw
+from PIL import Image, ImageChops, ImageDraw
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 OUT = ROOT / 'src-tauri' / 'icons' / 'android'
@@ -14,7 +14,7 @@ A = 432 * 4
 CYAN = (0, 243, 255)
 
 def svg(**opts):
-    js = f"import {{ mascotSvg }} from './src/mascot/gridMascot.ts'; process.stdout.write(mascotSvg({{ glow: {str(opts.get('glow', True)).lower()}, mono: {str(opts.get('mono', False)).lower()} }}));"
+    js = f"import {{ mascotSvg, HEAD_VIEWBOX }} from './src/mascot/gridMascot.ts'; process.stdout.write(mascotSvg({{ glow: {str(opts.get('glow', True)).lower()}, mono: {str(opts.get('mono', False)).lower()}, viewBox: HEAD_VIEWBOX, bust: true }}));"
     return subprocess.check_output(['bun', '-e', js], cwd=ROOT).decode()
 
 def render(svg_text, px):
@@ -34,8 +34,14 @@ def background(size):
     return img
 
 def place(mascot, size, scale=0.7, dy=0.0):
-    """Panáček (256 jednotek) do středu plátna size; scale = podíl šířky plátna"""
+    """Panáček do středu plátna size; scale = podíl šířky plátna. Ramena dole plynule vyblednou."""
     m = mascot.resize((round(size * scale), round(size * scale)), Image.LANCZOS)
+    fade = Image.new('L', m.size, 255)
+    fd = ImageDraw.Draw(fade)
+    start = int(m.height * 0.72)
+    for y in range(start, m.height):
+        fd.line([(0, y), (m.width, y)], fill=round(255 * (1 - (y - start) / (m.height - start)) ** 1.5))
+    m.putalpha(ImageChops.multiply(m.getchannel('A'), fade))
     layer = Image.new('RGBA', (size, size), (0, 0, 0, 0))
     layer.alpha_composite(m, ((size - m.width) // 2, round((size - m.height) / 2 + dy * size)))
     return layer

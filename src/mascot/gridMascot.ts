@@ -36,21 +36,31 @@ export const HEADPHONE_ACCENT_PATHS = [
   'M197 73 V99',
 ];
 
-/** Celý panáček jako samostatné SVG (ikona); glow = neonová záře (rozmazaná vrstva pod čarami) */
-export function mascotSvg({ glow = true, mono = false }: { glow?: boolean; mono?: boolean } = {}): string {
+/** Jen ramena (portrét pro ikonu – místo celého těla s rukama) */
+export const SHOULDER_PATHS = [
+  'M108 132 C90 144 74 162 66 196',
+  'M148 132 C166 144 182 162 190 196',
+];
+
+/** Výřez jen na hlavu se sluchátky a ramena (ikona – jako původní logo GRIDu) */
+export const HEAD_VIEWBOX = '30 -8 196 196';
+
+/** Panáček jako samostatné SVG (ikona); glow = neonová záře; viewBox = výřez (výchozí celý) */
+export function mascotSvg({ glow = true, mono = false, viewBox = '0 0 256 256', bust = false }: { glow?: boolean; mono?: boolean; viewBox?: string; bust?: boolean } = {}): string {
+  const body = bust ? SHOULDER_PATHS : BODY_PATHS;
   const line = mono ? '#ffffff' : CYAN;
   const core = mono ? '#ffffff' : CORE;
   const accent = mono ? '#ffffff' : PINK;
   const strokes = (paths: string[], color: string, w: number, extra = '') =>
     paths.map((d) => `<path d="${d}" fill="none" stroke="${color}" stroke-width="${w}"${extra}/>`).join('');
   const shape =
-    strokes(BODY_PATHS, line, 5.5) + strokes(HEAD_PATHS, line, 5.5) + strokes(HEADPHONE_PATHS, line, 6.5) +
+    strokes(body, line, 5.5) + strokes(HEAD_PATHS, line, 5.5) + strokes(HEADPHONE_PATHS, line, 6.5) +
     strokes(HEADPHONE_ACCENT_PATHS, accent, 9);
   const cores = mono ? '' :
-    strokes(BODY_PATHS, core, 1.65, ' opacity=".75"') + strokes(HEAD_PATHS, core, 1.65, ' opacity=".75"') +
+    strokes(body, core, 1.65, ' opacity=".75"') + strokes(HEAD_PATHS, core, 1.65, ' opacity=".75"') +
     strokes(HEADPHONE_PATHS, core, 1.9, ' opacity=".75"');
   const glowLayer = glow && !mono ? `<g filter="url(#glow)" opacity=".65">${shape}</g>` : '';
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" stroke-linecap="round" stroke-linejoin="round">` +
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${viewBox}" stroke-linecap="round" stroke-linejoin="round">` +
     `<defs><filter id="glow" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="5"/></filter></defs>` +
     `${glowLayer}${shape}${cores}</svg>`;
 }
