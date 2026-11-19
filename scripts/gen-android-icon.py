@@ -84,6 +84,20 @@ def main():
     (OUT / 'values').mkdir(exist_ok=True)
     (OUT / 'values' / 'ic_launcher_background.xml').write_text(
         '<?xml version="1.0" encoding="utf-8"?>\n<resources>\n  <color name="ic_launcher_background">#0A1634</color>\n</resources>\n')
+    # ── Malá ikona do stavového řádku / oznámení: bílá silueta (Android ji obarví) ──
+    stat = render(svg(glow=False, mono=True), 384)
+    stat_sizes = {'mdpi': 24, 'hdpi': 36, 'xhdpi': 48, 'xxhdpi': 72, 'xxxhdpi': 96}
+    for dens, px in stat_sizes.items():
+        d = OUT / f'drawable-{dens}'; d.mkdir(parents=True, exist_ok=True)
+        stat.resize((px, px), Image.LANCZOS).save(d / 'ic_stat_grid.png')
+
+    # ── Obrázek přehrávače v liště (Android z něj bere pozadí i barvy ovladače) ──
+    ART = 1024
+    art_bg = background(ART // 4).resize((ART, ART), Image.BICUBIC).convert('RGBA')
+    head = place(render(svg(glow=True), ART * 2), ART * 2, scale=0.62).resize((ART, ART), Image.LANCZOS)
+    art = Image.alpha_composite(art_bg, head)
+    d = OUT / 'drawable-nodpi'; d.mkdir(parents=True, exist_ok=True)
+    art.convert('RGB').save(d / 'media_art.png', optimize=True)
     print('hotovo:', OUT)
 
 if __name__ == '__main__':

@@ -10,6 +10,8 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.ServiceInfo
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.media.AudioManager
 import android.os.Build
 import android.os.IBinder
@@ -69,6 +71,8 @@ class MediaPlaybackService : Service() {
   }
 
   private lateinit var session: MediaSessionCompat
+  /** Obrázek přehrávače v liště a na zamykací obrazovce – Android z něj bere pozadí i barvy ovladače */
+  private val artwork: Bitmap? by lazy { BitmapFactory.decodeResource(resources, R.drawable.media_art) }
   private var noisyRegistered = false
 
   private val noisyReceiver = object : BroadcastReceiver() {
@@ -121,6 +125,9 @@ class MediaPlaybackService : Service() {
         .putString(MediaMetadataCompat.METADATA_KEY_TITLE, title.ifEmpty { "GRID" })
         .putString(MediaMetadataCompat.METADATA_KEY_ARTIST, "Zažij VR GRID")
         .putLong(MediaMetadataCompat.METADATA_KEY_DURATION, durationMs)
+        .putBitmap(MediaMetadataCompat.METADATA_KEY_ALBUM_ART, artwork)
+        .putBitmap(MediaMetadataCompat.METADATA_KEY_ART, artwork)
+        .putBitmap(MediaMetadataCompat.METADATA_KEY_DISPLAY_ICON, artwork)
         .build(),
     )
     session.setPlaybackState(
@@ -172,7 +179,10 @@ class MediaPlaybackService : Service() {
       NotificationCompat.Action(android.R.drawable.ic_media_play, getString(R.string.action_play), actionIntent(ACTION_PLAY, 1))
     }
     return NotificationCompat.Builder(this, CHANNEL_ID)
-      .setSmallIcon(android.R.drawable.ic_media_play)
+      .setSmallIcon(R.drawable.ic_stat_grid) // silueta panáčka ve stavovém řádku
+      .setLargeIcon(artwork)
+      .setColor(0xFF00F3FF.toInt()) // azurová GRIDu
+      .setColorized(true) // starší Androidy obarví celé oznámení podle obrázku / barvy
       .setContentTitle(title.ifEmpty { "GRID" })
       .setContentText("Zažij VR GRID")
       .setContentIntent(openAppIntent())
