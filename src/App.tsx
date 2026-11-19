@@ -5,6 +5,7 @@ import {
 import { useAudioPlayer } from './hooks/useAudioPlayer';
 import { closeAudioGraph } from './audio/audioGraph';
 import { startDrag } from './utils/drag';
+import { SplashScreen } from './components/SplashScreen';
 import { isAndroidApp, openWebsiteAndroid, postPlaybackState, setImmersive } from './platform/android';
 import { SpectrumVisualizer } from './components/SpectrumVisualizer';
 // three.js je velký – načte se až při otevření Visualizer Studia (rychlejší start přehrávače)
@@ -55,6 +56,8 @@ function App() {
   const [isDragging,    setIsDragging]    = useState(false);
   const [showVisualizer, setShowVisualizer] = useState(false);
   const [showEQ,         setShowEQ]        = useState(false);
+  /** Úvodní animace při spuštění */
+  const [showSplash, setShowSplash] = useState(true);
   /** Visualizer přes celý monitor (celá obrazovka okna) */
   const [vizFullscreen, setVizFullscreen] = useState(false);
   const [activePreset,   setActivePreset]  = useState<EQPreset>('flat');
@@ -595,6 +598,8 @@ function App() {
       )}
 
       <audio ref={audioRef} preload="auto" className="hidden" />
+
+      {showSplash && <SplashScreen onDone={() => setShowSplash(false)} />}
 
       {/* Visualizer Studio – telefon: přes celou obrazovku */}
       {showVisualizer && isMobile && (

@@ -82,7 +82,9 @@ export function ensureAudioGraph(audio: HTMLMediaElement): AudioGraph | null {
     graph = { ctx, source, filters, analyser, bassAnalyser, gain };
     graphs.set(audio, graph);
   }
-  if (graph.ctx.state === 'suspended') graph.ctx.resume().catch(() => {});
+  // Při každém přehrání znovu rozběhnout – Chromium na Androidu kontext pozastaví / přeruší
+  // (jiná aplikace, hovor, telefon na pozadí) a ten pak sám nenaběhne; zvuk by šel „do ticha“
+  if (graph.ctx.state !== 'running') graph.ctx.resume().catch(() => {});
   return graph;
 }
 

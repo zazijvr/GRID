@@ -10,8 +10,6 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.ServiceInfo
-import android.media.AudioAttributes
-import android.media.AudioFocusRequest
 import android.media.AudioManager
 import android.os.Build
 import android.os.IBinder
@@ -27,7 +25,9 @@ import androidx.media.app.NotificationCompat.MediaStyle
  *  - drží aplikaci naživu se zhasnutou obrazovkou (foreground service typu mediaPlayback),
  *  - ukazuje oznámení a ovládání na zamykací obrazovce (MediaSession),
  *  - přijímá tlačítka sluchátek / Bluetooth / hodinek,
- *  - ustoupí hovoru a jiným aplikacím (audio focus) a zastaví při vytažení sluchátek.
+ *  - zastaví při vytažení sluchátek.
+ * Audio focus (hovor, jiné aplikace) si NEBERE – ten řeší WebView sám. Vlastní žádost o focus
+ * WebView umlčela (focus mu sebrala): přehrávání se hned zastavilo a pak hrálo bez zvuku.
  * Povely posílá zpět do aplikace přes MainActivity.sendMedia(). Není dostupná jiným aplikacím
  * (exported=false); akce z oznámení jdou přes explicitní PendingIntent.
  */
@@ -69,11 +69,6 @@ class MediaPlaybackService : Service() {
   }
 
   private lateinit var session: MediaSessionCompat
-  private lateinit var audioManager: AudioManager
-  private var focusRequest: AudioFocusRequest? = null
-  private var hasFocus = false
-  /** Pauza kvůli krátké ztrátě zvuku (hovor, navigace) – po návratu se zase pustí */
-  private var pausedByFocusLoss = false
   private var noisyRegistered = false
 
   private val noisyReceiver = object : BroadcastReceiver() {
@@ -83,33 +78,9 @@ class MediaPlaybackService : Service() {
     }
   }
 
-  private val focusListener = AudioManager.OnAudioFocusChangeListener { change ->
-    when (change) {
-      AudioManager.AUDIOFOCUS_LOSS -> {
-        hasFocus = false
-        pausedByFocusLoss = false
-        MainActivity.sendMedia("pause")
-      }
-      AudioManager.AUDIOFOCUS_LOSS_TRANSIENT, AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK -> {
-        if (playing) {
-          pausedByFocusLoss = true
-          MainActivity.sendMedia("pause")
-        }
-      }
-      AudioManager.AUDIOFOCUS_GAIN -> {
-        hasFocus = true
-        if (pausedByFocusLoss) {
-          pausedByFocusLoss = false
-          MainActivity.sendMedia("play")
-        }
-      }
-    }
-  }
-
   override fun onCreate() {
     super.onCreate()
     instance = this
-    audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
 
     val nm = getSystemService(NotificationManager::class.java)
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -143,7 +114,7 @@ class MediaPlaybackService : Service() {
     return START_NOT_STICKY // bez aplikace (WebView) nemá smysl službu obnovovat
   }
 
-  /** Oznámení, MediaSession, audio focus a hlídání sluchátek podle aktuálního stavu */
+  /** Oznámení, MediaSession a hlídání sluchátek podle aktuálního stavu */
   fun refresh() {
     session.setMetadata(
       MediaMetadataCompat.Builder()
@@ -163,7 +134,6 @@ class MediaPlaybackService : Service() {
     )
 
     if (playing) {
-      requestFocus()
       if (!noisyRegistered) {
         ContextCompat.registerReceiver(this, noisyReceiver, IntentFilter(AudioManager.ACTION_AUDIO_BECOMING_NOISY), ContextCompat.RECEIVER_NOT_EXPORTED)
         noisyRegistered = true
@@ -179,28 +149,6 @@ class MediaPlaybackService : Service() {
     } else {
       startForeground(NOTIFICATION_ID, notification)
     }
-  }
-
-  private fun requestFocus() {
-    if (hasFocus) return
-    val result = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-      val req = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)
-        .setAudioAttributes(AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_MEDIA).setContentType(AudioAttributes.CONTENT_TYPE_MUSIC).build())
-        .setOnAudioFocusChangeListener(focusListener)
-        .build()
-      focusRequest = req
-      audioManager.requestAudioFocus(req)
-    } else {
-      @Suppress("DEPRECATION")
-      audioManager.requestAudioFocus(focusListener, AudioManager.STREAM_MUSIC, AudioManager.AUDIOFOCUS_GAIN)
-    }
-    hasFocus = result == AudioManager.AUDIOFOCUS_REQUEST_GRANTED
-  }
-
-  private fun abandonFocus() {
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) focusRequest?.let { audioManager.abandonAudioFocusRequest(it) }
-    else @Suppress("DEPRECATION") audioManager.abandonAudioFocus(focusListener)
-    hasFocus = false
   }
 
   private fun openAppIntent(): PendingIntent =
@@ -252,7 +200,6 @@ class MediaPlaybackService : Service() {
       unregisterReceiver(noisyReceiver)
       noisyRegistered = false
     }
-    abandonFocus()
     session.isActive = false
     session.release()
     super.onDestroy()
