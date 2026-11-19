@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { BODY_PATHS, CORE, CYAN, HEAD_PATHS, HEAD_PIVOT, HEADPHONE_ACCENT_PATHS, HEADPHONE_PATHS, PINK } from '../mascot/gridMascot';
+import { CYAN } from '../mascot/gridMascot';
+import { DancingMascot } from '../mascot/DancingMascot';
 
 const BPM = 120;
 const BEAT = 60 / BPM;
@@ -122,9 +123,6 @@ export function SplashScreen({ onDone }: { onDone: () => void }) {
     return () => cancelAnimationFrame(raf);
   }, [reduced]);
 
-  const lines = (paths: string[], color: string, width: number, opacity = 1) =>
-    paths.map((d, i) => <path key={i} d={d} fill="none" stroke={color} strokeWidth={width} opacity={opacity} />);
-
   return (
     <div
       onClick={finish}
@@ -137,22 +135,8 @@ export function SplashScreen({ onDone }: { onDone: () => void }) {
       aria-hidden="true"
     >
       <style>{`
-        @keyframes grid-head-bob {
-          0%   { transform: rotate(-7deg) translateY(0); }
-          18%  { transform: rotate(5deg) translateY(4px); }
-          50%  { transform: rotate(7deg) translateY(0); }
-          68%  { transform: rotate(-5deg) translateY(4px); }
-          100% { transform: rotate(-7deg) translateY(0); }
-        }
-        @keyframes grid-body-bounce {
-          0%, 50%, 100% { transform: translateY(0); }
-          18%, 68%      { transform: translateY(3px); }
-        }
         @keyframes grid-pop { from { opacity: 0; transform: scale(.7); } to { opacity: 1; transform: none; } }
         @keyframes grid-title { from { opacity: 0; letter-spacing: .8em; } to { opacity: 1; letter-spacing: .45em; } }
-        .grid-head { transform-box: view-box; transform-origin: ${HEAD_PIVOT.x}px ${HEAD_PIVOT.y}px; animation: grid-head-bob ${BEAT * 2}s ease-in-out infinite; }
-        .grid-body { animation: grid-body-bounce ${BEAT * 2}s ease-in-out infinite; }
-        @media (prefers-reduced-motion: reduce) { .grid-head, .grid-body { animation: none; } }
       `}</style>
 
       <canvas ref={canvasRef} className="absolute inset-0 w-full h-full" />
@@ -160,28 +144,9 @@ export function SplashScreen({ onDone }: { onDone: () => void }) {
       {/* Panáček se sluchátky – hlava kývá do rytmu */}
       {/* Vnější vrstva centruje, vnitřní animuje (animace transformace by centrování přepsala) */}
       <div className="absolute" style={{ width: 'min(34vmin, 210px)', top: '42%', left: '50%', transform: 'translate(-50%, -52%)' }}>
-      <svg
-        viewBox="0 0 256 256"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        className="block w-full h-auto"
-        style={{
-          filter: `drop-shadow(0 0 6px ${CYAN}) drop-shadow(0 0 14px rgba(0,243,255,.45))`,
-          animation: 'grid-pop .6s cubic-bezier(.2,.8,.2,1.2) both',
-        }}
-      >
-        <g className="grid-body">
-          {lines(BODY_PATHS, CYAN, 5.5)}
-          {lines(BODY_PATHS, CORE, 1.65, 0.75)}
-        </g>
-        <g className="grid-head">
-          {lines(HEAD_PATHS, CYAN, 5.5)}
-          {lines(HEAD_PATHS, CORE, 1.65, 0.75)}
-          {lines(HEADPHONE_PATHS, CYAN, 6.5)}
-          {lines(HEADPHONE_PATHS, CORE, 1.9, 0.75)}
-          {lines(HEADPHONE_ACCENT_PATHS, PINK, 9)}
-        </g>
-      </svg>
+      <div style={{ animation: 'grid-pop .6s cubic-bezier(.2,.8,.2,1.2) both' }}>
+        <DancingMascot className="block w-full h-auto" beat={BEAT} />
+      </div>
       </div>
 
       <div

@@ -14,7 +14,7 @@ A = 432 * 4
 CYAN = (0, 243, 255)
 
 def svg(**opts):
-    js = f"import {{ mascotSvg, HEAD_VIEWBOX }} from './src/mascot/gridMascot.ts'; process.stdout.write(mascotSvg({{ glow: {str(opts.get('glow', True)).lower()}, mono: {str(opts.get('mono', False)).lower()}, viewBox: HEAD_VIEWBOX, bust: true }}));"
+    js = f"import {{ mascotSvg, HEAD_VIEWBOX }} from './src/mascot/gridMascot.ts'; process.stdout.write(mascotSvg({{ glow: {str(opts.get('glow', True)).lower()}, mono: {str(opts.get('mono', False)).lower()}, viewBox: HEAD_VIEWBOX, bust: true, threeQuarter: true }}));"
     return subprocess.check_output(['bun', '-e', js], cwd=ROOT).decode()
 
 def render(svg_text, px):
@@ -100,5 +100,26 @@ def main():
     art.convert('RGB').save(d / 'media_art.png', optimize=True)
     print('hotovo:', OUT)
 
+def preview(out_path):
+    """Jen náhled (nic v projektu nepřepíše): kulatá a čtvercová ikona, obrázek do lišty, malá ikona"""
+    fg = place(render(svg(glow=True), A), A)
+    bg = background(432).convert('RGBA')
+    full = Image.alpha_composite(bg.resize((A, A)), fg).crop((A * 0.083, A * 0.083, A * 0.917, A * 0.917)).resize((420, 420), Image.LANCZOS)
+    tiles = []
+    for shape in ('circle', 'square'):
+        m = Image.new('L', (420, 420), 0); dr = ImageDraw.Draw(m)
+        (dr.ellipse((0, 0, 419, 419), fill=255) if shape == 'circle' else dr.rounded_rectangle((0, 0, 419, 419), radius=95, fill=255))
+        t_ = Image.new('RGBA', (420, 420), (0, 0, 0, 0)); t_.paste(full, (0, 0), m); tiles.append(t_)
+    stat = render(svg(glow=False, mono=True), 160)
+    o = Image.new('RGBA', (2 * 440 + 200, 440), (40, 44, 52, 255))
+    for i, t_ in enumerate(tiles): o.alpha_composite(t_, (10 + i * 440, 10))
+    o.alpha_composite(stat, (900, 140))
+    o.convert('RGB').save(out_path)
+    print('náhled:', out_path)
+
 if __name__ == '__main__':
-    main()
+    import sys
+    if len(sys.argv) > 2 and sys.argv[1] == '--preview':
+        preview(sys.argv[2])
+    else:
+        main()

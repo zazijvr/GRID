@@ -42,23 +42,56 @@ export const SHOULDER_PATHS = [
   'M148 132 C166 144 182 162 190 196',
 ];
 
+const ellipse = (cx: number, cy: number, rx: number, ry: number) =>
+  `M${cx - rx} ${cy} A${rx} ${ry} 0 1 0 ${cx + rx} ${cy} A${rx} ${ry} 0 1 0 ${cx - rx} ${cy} Z`;
+
+/**
+ * Hlava natočená do tří čtvrtin (kouká doleva – z jeho pohledu doprava), jako původní logo GRIDu:
+ * hledí a úsměv posunuté a zúžené (perspektiva), dvojitý oblouk sluchátek, velká plastická mušle
+ * vpravo (prstenec + polstrování), levá mušle schovaná za hlavou.
+ */
+export const HEAD_3Q = {
+  /** posun + zúžení hledí a úsměvu (x' = 0.94·x − 6) */
+  faceTransform: 'matrix(0.94 0 0 1 -6 0)',
+  // obrys hlavy bez části schované za hledím (vlevo)
+  head: ['M78.4 54 A56 56 0 1 1 77.5 104'],
+  face: [HEAD_PATHS[1], HEAD_PATHS[2], HEAD_PATHS[3]],
+  band: [
+    'M68 54 C60 -4 190 -10 202 66',  // oblouk začíná nad hledím
+    'M79 54 C74 12 180 6 191 66',
+  ],
+  cups: [
+    ellipse(198, 96, 17, 30),   // mušle (vnější prstenec)
+    ellipse(205, 96, 9, 21),    // polstrování blíž k divákovi
+    'M196 66 V70',              // spojka s obloukem
+    'M60 74 Q50 92 60 112',     // kousek levé mušle za hlavou
+  ],
+  accent: ['M205 84 V108'],
+};
+
 /** Výřez jen na hlavu se sluchátky a ramena (ikona – jako původní logo GRIDu) */
 export const HEAD_VIEWBOX = '30 -8 196 196';
 
 /** Panáček jako samostatné SVG (ikona); glow = neonová záře; viewBox = výřez (výchozí celý) */
-export function mascotSvg({ glow = true, mono = false, viewBox = '0 0 256 256', bust = false }: { glow?: boolean; mono?: boolean; viewBox?: string; bust?: boolean } = {}): string {
+export function mascotSvg({ glow = true, mono = false, viewBox = '0 0 256 256', bust = false, threeQuarter = false }: { glow?: boolean; mono?: boolean; viewBox?: string; bust?: boolean; threeQuarter?: boolean } = {}): string {
   const body = bust ? SHOULDER_PATHS : BODY_PATHS;
   const line = mono ? '#ffffff' : CYAN;
   const core = mono ? '#ffffff' : CORE;
   const accent = mono ? '#ffffff' : PINK;
   const strokes = (paths: string[], color: string, w: number, extra = '') =>
     paths.map((d) => `<path d="${d}" fill="none" stroke="${color}" stroke-width="${w}"${extra}/>`).join('');
-  const shape =
-    strokes(body, line, 5.5) + strokes(HEAD_PATHS, line, 5.5) + strokes(HEADPHONE_PATHS, line, 6.5) +
-    strokes(HEADPHONE_ACCENT_PATHS, accent, 9);
-  const cores = mono ? '' :
-    strokes(body, core, 1.65, ' opacity=".75"') + strokes(HEAD_PATHS, core, 1.65, ' opacity=".75"') +
-    strokes(HEADPHONE_PATHS, core, 1.9, ' opacity=".75"');
+  const face = (inner: string) => `<g transform="${HEAD_3Q.faceTransform}">${inner}</g>`;
+  const shape = threeQuarter
+    ? strokes(body, line, 5.5) + strokes(HEAD_3Q.head, line, 5.5) + face(strokes(HEAD_3Q.face, line, 5.5)) +
+      strokes(HEAD_3Q.band, line, 6) + strokes(HEAD_3Q.cups, line, 6.5) + strokes(HEAD_3Q.accent, accent, 8)
+    : strokes(body, line, 5.5) + strokes(HEAD_PATHS, line, 5.5) + strokes(HEADPHONE_PATHS, line, 6.5) +
+      strokes(HEADPHONE_ACCENT_PATHS, accent, 9);
+  const cores = mono ? '' : threeQuarter
+    ? strokes(body, core, 1.65, ' opacity=".75"') + strokes(HEAD_3Q.head, core, 1.65, ' opacity=".75"') +
+      face(strokes(HEAD_3Q.face, core, 1.65, ' opacity=".75"')) + strokes(HEAD_3Q.band, core, 1.8, ' opacity=".75"') +
+      strokes(HEAD_3Q.cups, core, 1.9, ' opacity=".75"')
+    : strokes(body, core, 1.65, ' opacity=".75"') + strokes(HEAD_PATHS, core, 1.65, ' opacity=".75"') +
+      strokes(HEADPHONE_PATHS, core, 1.9, ' opacity=".75"');
   const glowLayer = glow && !mono ? `<g filter="url(#glow)" opacity=".65">${shape}</g>` : '';
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${viewBox}" stroke-linecap="round" stroke-linejoin="round">` +
     `<defs><filter id="glow" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="5"/></filter></defs>` +
