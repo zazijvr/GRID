@@ -74,7 +74,7 @@ function BottomSheet({ open, onClose, height, title, children }: { open: boolean
       />
       <div
         ref={panelRef}
-        className={`fixed inset-x-0 bottom-0 z-50 flex flex-col rounded-t-3xl border-t border-cyan-400/30 bg-slate-950/95 shadow-[0_-10px_40px_rgba(0,243,255,0.15)] transition-transform duration-300 ease-out ${open ? 'translate-y-0' : 'translate-y-full'}`}
+        className={`fixed inset-x-0 bottom-0 z-50 flex flex-col rounded-t-3xl border-t border-cyan-400/30 bg-slate-950/95 shadow-[0_-10px_40px_rgba(0,243,255,0.15)] transition-transform duration-300 ease-out ${open ? 'translate-y-0' : 'translate-y-full pointer-events-none'}`}
         style={{ height, paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
         aria-hidden={!open}
       >
