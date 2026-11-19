@@ -49,6 +49,7 @@ export function SplashScreen({ onDone }: { onDone: () => void }) {
     const frame = (now: number) => {
       raf = requestAnimationFrame(frame);
       const w = canvas.clientWidth, h = canvas.clientHeight;
+      if (w < 10 || h < 10) return; // plátno ještě nemá velikost (první snímek)
       if (canvas.width !== Math.round(w * dpr) || canvas.height !== Math.round(h * dpr)) {
         canvas.width = Math.round(w * dpr);
         canvas.height = Math.round(h * dpr);
@@ -92,7 +93,7 @@ export function SplashScreen({ onDone }: { onDone: () => void }) {
       ctx.strokeStyle = `rgba(0, 243, 255, ${0.5 + kick * 0.5})`;
       ctx.lineWidth = 2;
       ctx.beginPath();
-      ctx.arc(cx, cy, R - 4, 0, Math.PI * 2);
+      ctx.arc(cx, cy, Math.max(1, R - 4), 0, Math.PI * 2);
       ctx.stroke();
 
       // Jiskry na každou dobu

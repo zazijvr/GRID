@@ -254,9 +254,12 @@ export function VisualizerStudio({ audioRef, isPlaying, trackName, currentTime, 
           >
             <Shuffle size={24} />
           </button>
-          <button onClick={toggleFullscreen} title={isFullscreen ? 'Ukončit celou obrazovku (F)' : 'Celá obrazovka (F)'} className={btn}>
-            {isFullscreen ? <Minimize size={24} /> : <Maximize size={24} />}
-          </button>
+          {/* Telefon: visualizer už je přes celou obrazovku – tlačítko by jen schovávalo lišty */}
+          {!mobile && (
+            <button onClick={toggleFullscreen} title={isFullscreen ? 'Ukončit celou obrazovku (F)' : 'Celá obrazovka (F)'} className={btn}>
+              {isFullscreen ? <Minimize size={24} /> : <Maximize size={24} />}
+            </button>
+          )}
         </div>
       </div>
 

@@ -1,5 +1,5 @@
 import React, { lazy, Suspense, useRef } from 'react';
-import { FolderOpen, FolderPlus, ListMusic, Trash2, X } from 'lucide-react';
+import { FolderOpen, FolderPlus, ListMusic, Music, Trash2, X } from 'lucide-react';
 import type { Track } from '../hooks/useAudioPlayer';
 import { Equalizer, type EQPreset } from './Equalizer';
 import { DancingMascot } from '../mascot/DancingMascot';
@@ -9,7 +9,7 @@ import { DancingMascot } from '../mascot/DancingMascot';
 
 const VisualizerStudio = lazy(() => import('./VisualizerStudio').then((m) => ({ default: m.VisualizerStudio })));
 
-export type MobileSheet = 'none' | 'playlist' | 'eq';
+export type MobileSheet = 'none' | 'playlist' | 'eq' | 'music';
 
 const ACCEPT_AUDIO = 'audio/*,.wav,.mp3,.flac,.ogg,.oga,.opus,.m4a,.aac,.wma,.weba,.webm';
 
@@ -90,7 +90,7 @@ function BottomSheet({ open, onClose, height, title, children }: { open: boolean
             </button>
           </div>
         </div>
-        <div className="flex-1 min-h-0 flex flex-col">{children}</div>
+        <div className={`${height === 'auto' ? '' : 'flex-1 min-h-0'} flex flex-col`}>{children}</div>
       </div>
     </>
   );
@@ -99,7 +99,12 @@ function BottomSheet({ open, onClose, height, title, children }: { open: boolean
 export function MobileLayout(p: MobileLayoutProps) {
   const addRef = useRef<HTMLInputElement>(null);
   const openRef = useRef<HTMLInputElement>(null);
-  const pick = (ref: React.RefObject<HTMLInputElement | null>) => ref.current?.click();
+  /** Systémový výběr souborů – jen z panelu Hudba (vědomá volba, ne omylem z dolní lišty) */
+  const pick = (ref: React.RefObject<HTMLInputElement | null>) => {
+    p.setSheet('none');
+    ref.current?.click();
+  };
+  const openMusic = () => p.setSheet('music');
   const onFiles = (e: React.ChangeEvent<HTMLInputElement>, fn: (f: File[]) => void) => {
     if (e.target.files?.length) fn(Array.from(e.target.files));
     e.target.value = '';
@@ -122,14 +127,13 @@ export function MobileLayout(p: MobileLayoutProps) {
   );
 
   const bottomBar = (
-    <div className="grid grid-cols-4 gap-1 border-t border-white/10 pt-2">
+    <div className="grid grid-cols-3 gap-1 border-t border-white/10 pt-2">
       {action(
         <svg width="20" height="20" viewBox="0 0 16 16" fill="none"><rect x="1" y="4" width="2" height="8" rx="1" fill="currentColor" /><rect x="5" y="1" width="2" height="14" rx="1" fill="currentColor" /><rect x="9" y="3" width="2" height="10" rx="1" fill="currentColor" /><rect x="13" y="5" width="2" height="6" rx="1" fill="currentColor" /></svg>,
         'Ekvalizér', () => p.setSheet(p.sheet === 'eq' ? 'none' : 'eq'), p.sheet === 'eq',
       )}
       {action(<ListMusic size={20} />, 'Seznam', () => p.setSheet(p.sheet === 'playlist' ? 'none' : 'playlist'), p.sheet === 'playlist')}
-      {action(<FolderPlus size={20} />, 'Přidat', () => pick(addRef))}
-      {action(<FolderOpen size={20} />, 'Otevřít', () => pick(openRef))}
+      {action(<Music size={20} />, 'Hudba', () => p.setSheet(p.sheet === 'music' ? 'none' : 'music'), p.sheet === 'music')}
     </div>
   );
 
@@ -216,11 +220,36 @@ export function MobileLayout(p: MobileLayoutProps) {
           })}
         </div>
         <div className="shrink-0 grid grid-cols-2 gap-2 p-3 border-t border-white/10">
-          <button onClick={() => pick(addRef)} className="flex items-center justify-center gap-2 py-3 rounded-xl border border-slate-700 text-slate-300 text-xs font-bold uppercase tracking-[0.15em] active:scale-95">
-            <FolderPlus size={16} /> Přidat
+          <button onClick={openMusic} className="col-span-2 flex items-center justify-center gap-2 py-3 rounded-xl border border-cyan-500/40 text-cyan-300 text-xs font-bold uppercase tracking-[0.15em] active:scale-95">
+            <Music size={16} /> Přidat nebo nahradit hudbu
           </button>
-          <button onClick={() => pick(openRef)} className="flex items-center justify-center gap-2 py-3 rounded-xl border border-cyan-500/40 text-cyan-300 text-xs font-bold uppercase tracking-[0.15em] active:scale-95">
-            <FolderOpen size={16} /> Otevřít
+        </div>
+      </BottomSheet>
+
+      <BottomSheet open={p.sheet === 'music'} onClose={() => p.setSheet('none')} height="auto" title="Hudba">
+        <div className="px-4 pb-4 pt-1 flex flex-col gap-3">
+          <button
+            onClick={() => pick(addRef)}
+            className="flex items-center gap-4 p-4 rounded-2xl border border-cyan-500/40 bg-cyan-500/10 text-left active:scale-[0.98]"
+          >
+            <FolderPlus size={26} className="text-cyan-300 shrink-0" />
+            <span>
+              <span className="block text-sm font-bold text-cyan-200 uppercase tracking-wider">Přidat skladby</span>
+              <span className="block text-xs text-slate-400 mt-0.5">Vybrané skladby se přidají na konec playlistu</span>
+            </span>
+          </button>
+          <button
+            onClick={() => pick(openRef)}
+            className="flex items-center gap-4 p-4 rounded-2xl border border-slate-700 bg-white/5 text-left active:scale-[0.98]"
+          >
+            <FolderOpen size={26} className="text-pink-300 shrink-0" />
+            <span>
+              <span className="block text-sm font-bold text-slate-200 uppercase tracking-wider">Nahradit playlist</span>
+              <span className="block text-xs text-slate-400 mt-0.5">Současný playlist se smaže a nahradí vybranými skladbami</span>
+            </span>
+          </button>
+          <button onClick={() => p.setSheet('none')} className="py-3 rounded-xl text-sm font-semibold text-slate-400 active:bg-white/5">
+            Zrušit
           </button>
         </div>
       </BottomSheet>
