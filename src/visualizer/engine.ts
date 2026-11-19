@@ -45,7 +45,9 @@ export class VisualizerEngine {
   private frameTimes: number[] = [];
   private sinceQualityChange = 0;
 
-  constructor(canvas: HTMLCanvasElement) {
+  /** startQuality: telefon začíná na nižší úrovni (baterie, teplo) */
+  constructor(canvas: HTMLCanvasElement, startQuality = 0) {
+    this.quality = Math.max(0, Math.min(QUALITY.length - 1, startQuality));
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: false, alpha: false, powerPreference: 'high-performance' });
     this.renderer.toneMapping = THREE.NoToneMapping; // sytý neon (tone mapping by barvy vybledil)
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;

@@ -54,6 +54,8 @@ interface EqualizerProps {
   isOpen: boolean;
   onClose: () => void;
   onPresetChange?: (preset: EQPreset) => void;
+  /** Vložený do panelu (telefon): plná šířka, bez vlastní hlavičky (má ji panel) */
+  embedded?: boolean;
 }
 
 const MAX_GAIN = 12;
@@ -73,7 +75,7 @@ function readSavedEq(): { preset: EQPreset; gains: EQGains } {
   }
 }
 
-export function Equalizer({ audioRef, isOpen, onClose, onPresetChange }: EqualizerProps) {
+export function Equalizer({ audioRef, isOpen, onClose, onPresetChange, embedded = false }: EqualizerProps) {
   const [{ preset, gains }, setEq] = useState(readSavedEq);
   const [dragging, setDragging] = useState<number | null>(null);
 
@@ -118,7 +120,7 @@ export function Equalizer({ audioRef, isOpen, onClose, onPresetChange }: Equaliz
 
   return (
     <div
-      className={`
+      className={embedded ? 'flex flex-col flex-1 min-h-0 w-full overflow-hidden' : `
         flex flex-col h-full bg-slate-900/95 border-l border-cyan-500/20
         shadow-[-8px_0_30px_rgba(0,0,0,0.5)] overflow-hidden shrink-0
         ${isOpen ? 'w-[280px]' : 'w-0'}
@@ -126,6 +128,7 @@ export function Equalizer({ audioRef, isOpen, onClose, onPresetChange }: Equaliz
       style={{ minHeight: 0 }}
     >
       {/* Header */}
+      {!embedded && (
       <div className="flex items-center justify-between px-4 py-3 border-b border-white/5 shrink-0 bg-slate-950/60">
         <div className="flex items-center gap-2">
           <svg width="14" height="14" viewBox="0 0 16 16" fill="none" className="text-cyan-400">
@@ -148,6 +151,7 @@ export function Equalizer({ audioRef, isOpen, onClose, onPresetChange }: Equaliz
           </svg>
         </button>
       </div>
+      )}
 
       {/* Preset buttons */}
       <div className="grid grid-cols-3 gap-1.5 px-3 pt-3 pb-2 shrink-0">

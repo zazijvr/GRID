@@ -34,6 +34,14 @@ interface VisualizerStudioProps {
   onVolume: (v: number | ((prev: number) => number)) => void;
   /** Přesun okna za prázdné místo horní lišty */
   onDragStart?: () => void;
+  /** Telefon: hlavní obrazovka „Teď hraje“ – přes celou plochu, bez zavírání */
+  mobile?: boolean;
+  /** Telefon: vlevo nahoře místo tlačítka Zavřít (logo) */
+  topLeft?: React.ReactNode;
+  /** Telefon: řada akcí pod ovládáním (ekvalizér, seznam, přidat…) */
+  bottomBar?: React.ReactNode;
+  /** Přes visualizer je otevřený panel – ztlumit a kreslit méně často (baterie) */
+  dimmed?: boolean;
 }
 
 const EFFECTS: Array<() => Effect> = [createRing, createWave, createEqualizer, createHex, createLasers, createGalaxy];
@@ -53,7 +61,7 @@ const readSettings = (): { effect: number; auto: boolean } => {
 
 const formatTime = (s: number) => (Number.isFinite(s) && s > 0 ? `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}` : '0:00');
 
-export function VisualizerStudio({ audioRef, isPlaying, trackName, currentTime, duration, onClose, docked = false, onDragStart, side = 'left', fullscreen = false, onFullscreen, volume, onTogglePlay, onNext, onPrev, onSeek, onVolume }: VisualizerStudioProps) {
+export function VisualizerStudio({ audioRef, isPlaying, trackName, currentTime, duration, onClose, docked = false, onDragStart, side = 'left', fullscreen = false, onFullscreen, volume, onTogglePlay, onNext, onPrev, onSeek, onVolume, mobile = false, topLeft, bottomBar, dimmed = false }: VisualizerStudioProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const engineRef = useRef<VisualizerEngine | null>(null);
@@ -68,6 +76,8 @@ export function VisualizerStudio({ audioRef, isPlaying, trackName, currentTime, 
   const [idle, setIdle] = useState(false);
   const playingRef = useRef(isPlaying);
   playingRef.current = isPlaying;
+  const dimmedRef = useRef(dimmed);
+  dimmedRef.current = dimmed;
 
   // ── Renderer + smyčka (jednou za otevření studia) ──
   useEffect(() => {
@@ -75,7 +85,7 @@ export function VisualizerStudio({ audioRef, isPlaying, trackName, currentTime, 
     if (!canvas) return;
     let engine: VisualizerEngine;
     try {
-      engine = new VisualizerEngine(canvas);
+      engine = new VisualizerEngine(canvas, mobile ? 1 : 0);
     } catch (e) {
       console.warn('WebGL není k dispozici', e);
       setError('Vizualizace potřebuje WebGL, které tady není k dispozici.');
@@ -85,9 +95,12 @@ export function VisualizerStudio({ audioRef, isPlaying, trackName, currentTime, 
     const analyzer = new AudioAnalyzer();
     let raf = 0;
     let last = performance.now();
+    let skip = 0;
 
     const frame = (now: number) => {
       raf = requestAnimationFrame(frame);
+      // Pod otevřeným panelem stačí každý třetí snímek (je ztlumený, šetří baterii)
+      if (dimmedRef.current && skip++ % 3 !== 0) return;
       const dt = Math.min(0.1, (now - last) / 1000); // po skrytí okna žádný skok
       last = now;
       const graph = getAudioGraph(audioRef.current);
@@ -100,6 +113,7 @@ export function VisualizerStudio({ audioRef, isPlaying, trackName, currentTime, 
       engine.dispose();
       engineRef.current = null;
     };
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- mobile se za běhu nemění
   }, [audioRef]);
 
   // ── Přepnutí efektu: krátké ztmavení, nová scéna, název efektu ──
@@ -194,18 +208,19 @@ export function VisualizerStudio({ audioRef, isPlaying, trackName, currentTime, 
   return (
     <div
       ref={containerRef}
-      className={`${docked || isFullscreen ? `relative w-full h-full ${side === 'right' ? 'border-l' : 'border-r'} border-cyan-500/30` : 'absolute inset-0 z-50'} flex items-center justify-center bg-black overflow-hidden ${!isFullscreen && !docked ? 'rounded-3xl border-2 border-cyan-500/20 shadow-[0_0_50px_rgba(0,243,255,0.15)] m-4' : ''} ${hideUi ? 'cursor-none' : ''}`}
+      className={`${mobile ? 'absolute inset-0' : docked || isFullscreen ? `relative w-full h-full ${side === 'right' ? 'border-l' : 'border-r'} border-cyan-500/30` : 'absolute inset-0 z-50'} flex items-center justify-center bg-black overflow-hidden ${!isFullscreen && !docked && !mobile ? 'rounded-3xl border-2 border-cyan-500/20 shadow-[0_0_50px_rgba(0,243,255,0.15)] m-4' : ''} ${hideUi ? 'cursor-none' : ''}`}
     >
       <canvas
         ref={canvasRef}
-        className="w-full h-full absolute inset-0 z-0 transition-opacity duration-200"
-        style={{ opacity: fading ? 0 : 1 }}
+        className="w-full h-full absolute inset-0 z-0 transition-opacity duration-300"
+        style={{ opacity: fading ? 0 : dimmed ? 0.35 : 1 }}
       />
 
       {error && <div className="relative z-10 px-6 text-center text-slate-300">{error}</div>}
 
       {/* Název efektu po přepnutí – malý štítek nahoře, aby nezakrýval efekt */}
       <div
+        style={mobile ? { top: 'calc(env(safe-area-inset-top, 0px) + 72px)' } : undefined}
         className={`absolute top-5 md:top-7 left-1/2 -translate-x-1/2 z-30 pointer-events-none transition-all duration-700 ${showName ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-2'}`}
       >
         <div className="px-3 py-1.5 rounded-full bg-black/55 border border-cyan-400/30 text-[11px] font-bold tracking-[0.25em] uppercase text-cyan-200 whitespace-nowrap shadow-[0_0_12px_rgba(0,243,255,0.25)]">
@@ -215,16 +230,21 @@ export function VisualizerStudio({ audioRef, isPlaying, trackName, currentTime, 
 
       {/* Horní lišta */}
       <div
+        style={mobile ? { paddingTop: 'calc(env(safe-area-inset-top, 0px) + 12px)' } : undefined}
         className={`absolute top-0 inset-x-0 z-20 p-4 md:p-6 flex justify-between items-start transition-opacity duration-500 ${hideUi ? 'opacity-0' : 'opacity-100'} ${docked && !isFullscreen ? 'cursor-move' : ''}`}
         onPointerDown={(e) => {
           // Prázdné místo lišty = přesun okna (jako titulek přehrávače)
           if (docked && !isFullscreen && e.button === 0 && e.target === e.currentTarget) onDragStart?.();
         }}
       >
-        <button onClick={onClose} title="Zavřít (Esc)" className={`${btn} hover:!text-pink-500 hover:!border-pink-500/50`}>
-          <X size={24} />
-        </button>
-        <div className="flex gap-2 md:gap-3">
+        {mobile ? (
+          topLeft ?? <span />
+        ) : (
+          <button onClick={onClose} title="Zavřít (Esc)" className={`${btn} hover:!text-pink-500 hover:!border-pink-500/50`}>
+            <X size={24} />
+          </button>
+        )}
+        <div className={`flex ${mobile ? 'gap-1.5' : 'gap-2 md:gap-3'}`}>
           <button onClick={() => step(-1)} title="Předchozí efekt (←)" className={btn}><ChevronLeft size={24} /></button>
           <button onClick={() => step(1)} title="Další efekt (→)" className={btn}><ChevronRight size={24} /></button>
           <button
@@ -241,13 +261,15 @@ export function VisualizerStudio({ audioRef, isPlaying, trackName, currentTime, 
       </div>
 
       {/* Skladba dole; na celé obrazovce (a na telefonu) i ovládání přehrávání */}
-      {trackName && (
-        <div className={`absolute bottom-0 inset-x-0 z-20 px-6 pb-5 pt-16 bg-gradient-to-t from-black/75 to-transparent transition-opacity duration-500 ${hideUi ? 'opacity-0' : 'opacity-100'} ${showControls ? '' : 'pointer-events-none'}`}>
+      {(trackName || mobile) && (
+        <div
+          style={mobile ? { paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 14px)' } : undefined}
+          className={`absolute bottom-0 inset-x-0 z-20 ${mobile ? 'px-5' : 'px-6 pb-5'} pt-16 bg-gradient-to-t from-black/75 to-transparent transition-opacity duration-500 ${hideUi ? 'opacity-0' : 'opacity-100'} ${showControls ? '' : 'pointer-events-none'}`}>
           <div className="max-w-3xl mx-auto">
             <div className="flex items-end justify-between gap-4">
               <div className="min-w-0">
                 <div className="text-[10px] tracking-[0.4em] uppercase text-cyan-300/70">{isPlaying ? 'Now playing' : 'Paused'}</div>
-                <div className="truncate text-lg md:text-2xl font-bold tracking-wide text-white drop-shadow-[0_0_12px_rgba(0,243,255,0.6)]">{trackName}</div>
+                <div className="truncate text-lg md:text-2xl font-bold tracking-wide text-white drop-shadow-[0_0_12px_rgba(0,243,255,0.6)]">{trackName ?? 'GRID'}</div>
               </div>
               <div className="shrink-0 font-mono text-xs text-slate-300/80 tabular-nums">
                 {formatTime(currentTime)} / {formatTime(duration)}
@@ -274,7 +296,34 @@ export function VisualizerStudio({ audioRef, isPlaying, trackName, currentTime, 
               </div>
             </div>
 
-            {showControls && (
+            {showControls && mobile && (
+              <>
+                <div className="mt-4 flex items-center justify-center gap-8">
+                  <button onClick={onPrev} title="Předchozí" className={ctrlBtn}><SkipBack size={26} fill="currentColor" /></button>
+                  <button
+                    onClick={onTogglePlay}
+                    title="Přehrát / pauza"
+                    className="w-16 h-16 rounded-full border-2 border-cyan-400/60 bg-black/50 text-cyan-300 flex items-center justify-center active:scale-95 shadow-[0_0_18px_rgba(0,243,255,0.35)] transition-all"
+                  >
+                    {isPlaying ? <Pause size={28} fill="currentColor" /> : <Play size={28} fill="currentColor" className="ml-1" />}
+                  </button>
+                  <button onClick={onNext} title="Další" className={ctrlBtn}><SkipForward size={26} fill="currentColor" /></button>
+                </div>
+                <div className="mt-3 flex items-center gap-3">
+                  <button onClick={() => onVolume((v) => (v > 0 ? 0 : lastVolume.current))} title="Ztlumit" className="text-slate-300 p-1">
+                    {volume === 0 ? <VolumeX size={18} /> : <Volume2 size={18} />}
+                  </button>
+                  <input
+                    type="range" min={0} max={1} step={0.01} value={volume}
+                    onChange={(e) => onVolume(Number(e.target.value))}
+                    aria-label="Hlasitost"
+                    className="flex-1 accent-cyan-400"
+                  />
+                </div>
+                {bottomBar && <div className="mt-3">{bottomBar}</div>}
+              </>
+            )}
+            {showControls && !mobile && (
               <div className="mt-4 flex items-center justify-between gap-4">
                 <div className="w-40 hidden sm:block" />
                 <div className="flex items-center gap-5">

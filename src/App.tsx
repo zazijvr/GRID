@@ -6,6 +6,7 @@ import { useAudioPlayer } from './hooks/useAudioPlayer';
 import { closeAudioGraph } from './audio/audioGraph';
 import { startDrag } from './utils/drag';
 import { SplashScreen } from './components/SplashScreen';
+import { MobileLayout, type MobileSheet } from './components/MobileLayout';
 import { isAndroidApp, openWebsiteAndroid, postPlaybackState, setImmersive } from './platform/android';
 import { SpectrumVisualizer } from './components/SpectrumVisualizer';
 // three.js je velký – načte se až při otevření Visualizer Studia (rychlejší start přehrávače)
@@ -56,6 +57,8 @@ function App() {
   const [isDragging,    setIsDragging]    = useState(false);
   const [showVisualizer, setShowVisualizer] = useState(false);
   const [showEQ,         setShowEQ]        = useState(false);
+  /** Telefon: otevřený vysouvací panel (seznam skladeb / ekvalizér) */
+  const [mobileSheet, setMobileSheet] = useState<MobileSheet>('none');
   /** Úvodní animace při spuštění */
   const [showSplash, setShowSplash] = useState(true);
   /** Visualizer přes celý monitor (celá obrazovka okna) */
@@ -155,6 +158,12 @@ function App() {
   mediaRef.current = { togglePlay, nextTrack, prevTrack, seek };
   const backRef = useRef<() => boolean>(() => false);
   backRef.current = () => {
+    if (isMobile) {
+      // Telefon: Zpět nejdřív ukončí celou obrazovku visualizeru, pak zavře panel; jinak aplikaci schová
+      if (vizFullscreen) { setFullscreen(false); return true; }
+      if (mobileSheet !== 'none') { setMobileSheet('none'); return true; }
+      return false;
+    }
     if (showVisualizer) {
       closeVisualizer();
       return true;
@@ -264,6 +273,41 @@ function App() {
       </Suspense>
     </div>
   );
+
+  // ── Telefon: visualizer jako hlavní obrazovka, seznam a ekvalizér ve vysouvacích panelech ──
+  if (isMobile) {
+    return (
+      <div className="relative w-full h-full overflow-hidden bg-black">
+        <MobileLayout
+          audioRef={audioRef}
+          tracks={tracks}
+          currentIndex={currentIndex}
+          currentTrack={currentTrack}
+          isPlaying={isPlaying}
+          currentTime={currentTime}
+          duration={duration}
+          volume={volume}
+          sheet={mobileSheet}
+          setSheet={setMobileSheet}
+          fullscreen={vizFullscreen}
+          onFullscreen={setFullscreen}
+          onTogglePlay={togglePlay}
+          onNext={nextTrack}
+          onPrev={prevTrack}
+          onSeek={seek}
+          onVolume={setVolume}
+          onPlayTrack={(i) => { playTrack(i); setMobileSheet('none'); }}
+          onRemoveTrack={removeTrack}
+          onAddFiles={addFiles}
+          onOpenFiles={(f) => { openFiles(f); setMobileSheet('none'); }}
+          onPresetChange={setActivePreset}
+          onOpenWebsite={openWebsite}
+        />
+        <audio ref={audioRef} preload="auto" className="hidden" />
+        {showSplash && <SplashScreen onDone={() => setShowSplash(false)} />}
+      </div>
+    );
+  }
 
   return (
     // Outer wrapper – flex-row pro player + EQ panel
