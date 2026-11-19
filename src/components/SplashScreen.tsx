@@ -145,7 +145,7 @@ export function SplashScreen({ onDone }: { onDone: () => void }) {
       {/* Vnější vrstva centruje, vnitřní animuje (animace transformace by centrování přepsala) */}
       <div className="absolute" style={{ width: 'min(34vmin, 210px)', top: '42%', left: '50%', transform: 'translate(-50%, -52%)' }}>
       <div style={{ animation: 'grid-pop .6s cubic-bezier(.2,.8,.2,1.2) both' }}>
-        <DancingMascot className="block w-full h-auto" beat={BEAT} />
+        <DancingMascot className="block w-full h-auto" beat={BEAT} headOnly />
       </div>
       </div>
 

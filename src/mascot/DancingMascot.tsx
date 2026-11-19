@@ -6,7 +6,7 @@ const BEAT_S = 0.5; // 120 BPM
  * VR panáček se sluchátky (hlava natočená do tří čtvrtin jako na ikoně), který pokyvuje hlavou
  * do rytmu – na každou dobu kývne dolů a vrátí se; tělo lehce pruží. Úvodní animace a prázdný playlist.
  */
-export function DancingMascot({ className = '', beat = BEAT_S }: { className?: string; beat?: number }) {
+export function DancingMascot({ className = '', beat = BEAT_S, headOnly = false }: { className?: string; beat?: number; headOnly?: boolean }) {
   const lines = (paths: string[], color: string, width: number, opacity = 1) =>
     paths.map((d, i) => <path key={i} d={d} fill="none" stroke={color} strokeWidth={width} opacity={opacity} />);
   return (
@@ -28,17 +28,19 @@ export function DancingMascot({ className = '', beat = BEAT_S }: { className?: s
         @media (prefers-reduced-motion: reduce) { .grid-dm-head, .grid-dm-body { animation: none; } }
       `}</style>
       <svg
-        viewBox="0 0 256 256"
+        viewBox={headOnly ? '40 -12 176 176' : '0 0 256 256'}
         strokeLinecap="round"
         strokeLinejoin="round"
         className={className}
         style={{ filter: `drop-shadow(0 0 6px ${CYAN}) drop-shadow(0 0 14px rgba(0,243,255,.45))`, overflow: 'visible' }}
         aria-hidden="true"
       >
-        <g className="grid-dm-body">
-          {lines(BODY_PATHS, CYAN, 5.5)}
-          {lines(BODY_PATHS, CORE, 1.65, 0.75)}
-        </g>
+        {!headOnly && (
+          <g className="grid-dm-body">
+            {lines(BODY_PATHS, CYAN, 5.5)}
+            {lines(BODY_PATHS, CORE, 1.65, 0.75)}
+          </g>
+        )}
         <g className="grid-dm-head">
           {lines(HEAD_3Q.head, CYAN, 5.5)}
           {lines(HEAD_3Q.head, CORE, 1.65, 0.75)}
