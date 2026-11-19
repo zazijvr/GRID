@@ -136,6 +136,7 @@ export function SplashScreen({ onDone }: { onDone: () => void }) {
     >
       <style>{`
         @keyframes grid-pop { from { opacity: 0; transform: scale(.7); } to { opacity: 1; transform: none; } }
+        @keyframes grid-logo-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
         @keyframes grid-title { from { opacity: 0; letter-spacing: .8em; } to { opacity: 1; letter-spacing: .45em; } }
       `}</style>
 
@@ -155,11 +156,12 @@ export function SplashScreen({ onDone }: { onDone: () => void }) {
       >
         GRID
       </div>
+      {/* Oficiální logo ZažijVR pod názvem */}
       <div
-        className="absolute left-0 right-0 text-center text-[10px] tracking-[0.5em] uppercase text-cyan-300/70"
-        style={{ top: 'calc(42% + 43vmin + 44px)', animation: 'grid-title .9s ease-out .7s both' }}
+        className="absolute left-0 right-0 flex justify-center"
+        style={{ top: 'calc(42% + 43vmin + 46px)', animation: 'grid-logo-in .9s ease-out .7s both' }}
       >
-        Zažij VR
+        <img src="/logo.png" alt="Zažij VR" className="h-10 w-auto object-contain drop-shadow-[0_0_8px_rgba(0,243,255,0.55)]" draggable={false} />
       </div>
     </div>
   );
