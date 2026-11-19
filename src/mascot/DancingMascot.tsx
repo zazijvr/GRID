@@ -12,18 +12,21 @@ export function DancingMascot({ className = '', beat = BEAT_S, headOnly = false 
   return (
     <>
       <style>{`
+        /* Kývnutí do rytmu jako člověk: panáček kouká doleva, takže brada jde dolů a dopředu
+           = otočení proti směru hodinových ručiček (záporný úhel). Rychle dolů na dobu,
+           pomalejší měkký návrat s lehkým dozvukem. */
         @keyframes grid-dm-nod {
-          0%   { transform: rotate(0deg) translateY(0); }
-          22%  { transform: rotate(7deg) translateY(6px); }
-          55%  { transform: rotate(-2deg) translateY(-1px); }
-          100% { transform: rotate(0deg) translateY(0); }
+          0%   { transform: rotate(0deg) translate(0, 0); animation-timing-function: cubic-bezier(.3, 0, .2, 1); }
+          16%  { transform: rotate(-9deg) translate(-2px, 3px); animation-timing-function: cubic-bezier(.4, 0, .4, 1); }
+          58%  { transform: rotate(1.5deg) translate(0, -1px); animation-timing-function: ease-in-out; }
+          100% { transform: rotate(0deg) translate(0, 0); }
         }
         @keyframes grid-dm-body {
           0%, 100% { transform: translateY(0); }
-          22%      { transform: translateY(3px); }
-          55%      { transform: translateY(-1px); }
+          16%      { transform: translateY(2px); }
+          58%      { transform: translateY(-0.5px); }
         }
-        .grid-dm-head { transform-box: view-box; transform-origin: ${HEAD_PIVOT.x}px ${HEAD_PIVOT.y}px; animation: grid-dm-nod ${beat}s ease-in-out infinite; }
+        .grid-dm-head { transform-box: view-box; transform-origin: ${HEAD_PIVOT.x}px ${HEAD_PIVOT.y}px; animation: grid-dm-nod ${beat}s infinite; }
         .grid-dm-body { animation: grid-dm-body ${beat}s ease-in-out infinite; }
         @media (prefers-reduced-motion: reduce) { .grid-dm-head, .grid-dm-body { animation: none; } }
       `}</style>
