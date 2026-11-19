@@ -262,6 +262,9 @@ export function MobileLayout(p: MobileLayoutProps) {
 
       <BottomSheet open={p.sheet === 'music'} onClose={() => p.setSheet('none')} height="auto" title="Hudba">
         <div className="px-4 pb-4 pt-1 flex flex-col gap-3">
+          <div className="text-[11px] text-slate-500 text-center -mb-1">
+            Více skladeb najednou: v systémovém výběru <span className="text-slate-300">podrž prst</span> na první, pak ťukej na další a potvrď
+          </div>
           <button
             onClick={() => pick(addRef)}
             className="flex items-center gap-4 p-4 rounded-2xl border border-cyan-500/40 bg-cyan-500/10 text-left active:scale-[0.98]"

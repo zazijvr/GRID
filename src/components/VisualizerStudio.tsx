@@ -110,10 +110,14 @@ export function VisualizerStudio({ audioRef, isPlaying, trackName, currentTime, 
       last = now;
       const graph = getAudioGraph(audioRef.current);
       analyzer.update(graph?.analyser ?? null, playingRef.current, dt, graph?.bassAnalyser);
-      engine.render(analyzer.features, dt);
+      engine.render(analyzer.features, dt, !dimmedRef.current);
     };
     raf = requestAnimationFrame(frame);
+    // Návrat do aplikace: první snímky bývají pomalé – měřit výkon znovu od začátku
+    const onVisibility = () => { if (!document.hidden) engine.resetPerformance(); };
+    document.addEventListener('visibilitychange', onVisibility);
     return () => {
+      document.removeEventListener('visibilitychange', onVisibility);
       cancelAnimationFrame(raf);
       engine.dispose();
       engineRef.current = null;
@@ -333,17 +337,7 @@ export function VisualizerStudio({ audioRef, isPlaying, trackName, currentTime, 
                     {repeatMode === 'one' ? <Repeat1 size={20} /> : <Repeat size={20} />}
                   </button>
                 </div>
-                <div className="mt-3 flex items-center gap-3">
-                  <button onClick={() => onVolume((v) => (v > 0 ? 0 : lastVolume.current))} title="Ztlumit" className="text-slate-300 p-1">
-                    {volume === 0 ? <VolumeX size={18} /> : <Volume2 size={18} />}
-                  </button>
-                  <input
-                    type="range" min={0} max={1} step={0.01} value={volume}
-                    onChange={(e) => onVolume(Number(e.target.value))}
-                    aria-label="Hlasitost"
-                    className="flex-1 accent-cyan-400"
-                  />
-                </div>
+                {/* Hlasitost na telefonu = systémová (tlačítka telefonu, sluchátka) – žádný druhý posuvník */}
                 {bottomBar && <div className="mt-3">{bottomBar}</div>}
               </>
             )}

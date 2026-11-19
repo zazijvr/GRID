@@ -1,6 +1,6 @@
 [package]
 name = "zvr-grid"
-version = "1.2.0"
+version = "1.2.1"
 description = "Zažij VR GRID – hudební přehrávač"
 authors = ["ZažijVR"]
 edition = "2021"

@@ -41,6 +41,7 @@ export class VisualizerEngine {
   private width = 0;
   private height = 0;
   private quality = 0;
+  private readonly startQuality: number;
   // Měření výkonu
   private frameTimes: number[] = [];
   private sinceQualityChange = 0;
@@ -48,6 +49,7 @@ export class VisualizerEngine {
   /** startQuality: telefon začíná na nižší úrovni (baterie, teplo) */
   constructor(canvas: HTMLCanvasElement, startQuality = 0) {
     this.quality = Math.max(0, Math.min(QUALITY.length - 1, startQuality));
+    this.startQuality = this.quality;
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: false, alpha: false, powerPreference: 'high-performance' });
     this.renderer.toneMapping = THREE.NoToneMapping; // sytý neon (tone mapping by barvy vybledil)
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -60,6 +62,10 @@ export class VisualizerEngine {
     // Převod barev a tone mapping na konci řetězce – bez něj je obraz s bloomem tmavý / jiných barev
     this.composer.addPass(new OutputPass());
     this.applyQuality();
+    // Android po přepnutí aplikací může WebGL kontext zahodit – po obnovení znovu nastavit
+    // velikost i render targety efektů (jinak zůstane obraz bez záře)
+    canvas.addEventListener('webglcontextlost', this.onContextLost);
+    canvas.addEventListener('webglcontextrestored', this.onContextRestored);
   }
 
   setEffect(effect: Effect) {
@@ -99,23 +105,42 @@ export class VisualizerEngine {
     }
   }
 
-  /** Při trvale nízkých FPS sníží kvalitu (po 3 s měření, nejvýš jednou za 3 s) */
+  /**
+   * Při trvale nízkých FPS sníží kvalitu, při trvale plynulém chodu ji zase vrátí (max. na výchozí).
+   * Medián místo průměru a vynechané záseky (přepnutí aplikace, načtení skladby, otevření panelu) –
+   * jinak jeden zásek srazil průměr a záře (bloom) se vypnula natrvalo.
+   */
   private watchPerformance(dt: number) {
     this.sinceQualityChange += dt;
+    if (dt >= 0.09) return; // zásek, ne skutečná rychlost vykreslování
     this.frameTimes.push(dt);
-    if (this.frameTimes.length > 90) this.frameTimes.shift();
-    if (this.sinceQualityChange < 3 || this.frameTimes.length < 90 || this.quality >= QUALITY.length - 1) return;
-    const avg = this.frameTimes.reduce((a, b) => a + b, 0) / this.frameTimes.length;
-    if (avg > 1 / 40) {
-      this.quality++;
-      this.applyQuality();
-      this.frameTimes = [];
-      this.sinceQualityChange = 0;
+    if (this.frameTimes.length > 120) this.frameTimes.shift();
+    if (this.sinceQualityChange < 3 || this.frameTimes.length < 120) return;
+    const sorted = [...this.frameTimes].sort((a, b) => a - b);
+    const median = sorted[sorted.length >> 1];
+    if (median > 1 / 40 && this.quality < QUALITY.length - 1) {
+      this.setQuality(this.quality + 1);
+    } else if (median < 1 / 55 && this.quality > this.startQuality && this.sinceQualityChange > 8) {
+      this.setQuality(this.quality - 1);
     }
   }
 
-  /** Jeden snímek; dt = sekundy od minulého snímku */
-  render(f: AudioFeatures, dt: number) {
+  private setQuality(q: number) {
+    this.quality = q;
+    this.applyQuality();
+    this.frameTimes = [];
+    this.sinceQualityChange = 0;
+  }
+
+  /** Po návratu do aplikace začít měřit znovu (první snímky po obnovení bývají pomalé) */
+  resetPerformance() {
+    this.frameTimes = [];
+    this.sinceQualityChange = 0;
+  }
+
+  /** Jeden snímek; dt = sekundy od minulého snímku. measure=false: snímky se záměrně vynechávají
+   *  (ztlumené pod panelem) – neměřit výkon, jinak by to vypadalo jako nízké FPS. */
+  render(f: AudioFeatures, dt: number, measure = true) {
     const e = this.effect;
     if (!e) return;
     const t = (performance.now() - this.effectStart) / 1000;
@@ -127,7 +152,7 @@ export class VisualizerEngine {
     this.bloom.strength = e.bloomStrength ? e.bloomStrength(f) : e.bloom.strength;
     if (this.bloom.enabled) this.composer.render(dt);
     else this.renderer.render(e.scene, e.camera);
-    this.watchPerformance(dt);
+    if (measure) this.watchPerformance(dt);
   }
 
   private disposeEffect() {
@@ -147,7 +172,16 @@ export class VisualizerEngine {
     this.effect = null;
   }
 
+  private onContextLost = (e: Event) => e.preventDefault(); // povolí obnovení kontextu
+  private onContextRestored = () => {
+    this.width = 0;
+    this.resetPerformance();
+  };
+
   dispose() {
+    const canvas = this.renderer.domElement;
+    canvas.removeEventListener('webglcontextlost', this.onContextLost);
+    canvas.removeEventListener('webglcontextrestored', this.onContextRestored);
     this.disposeEffect();
     this.composer.dispose();
     this.bloom.dispose();

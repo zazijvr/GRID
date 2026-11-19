@@ -15,7 +15,11 @@ const isAudioFile = (f: File) =>
   !PLAYLIST_EXT.test(f.name) && !/mpegurl|scpls|xspf/i.test(f.type) && (f.type.startsWith('audio/') || AUDIO_EXT.test(f.name));
 
 const VOLUME_KEY = 'zvr-grid-volume';
+/** Telefon: hlasitost řídí jen systém (tlačítka, sluchátka) – aplikace hraje naplno, jinak by
+ *  stažená hlasitost v aplikaci omezovala i systémovou (a dřív uložená nízká hodnota by zůstala). */
+const SYSTEM_VOLUME = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
 const readVolume = () => {
+  if (SYSTEM_VOLUME) return 1;
   try {
     const v = Number(localStorage.getItem(VOLUME_KEY));
     return Number.isFinite(v) && v > 0 && v <= 1 ? v : 1;
@@ -43,6 +47,8 @@ export function useAudioPlayer() {
   /** Název uloženého playlistu, ze kterého je aktuální fronta (null = neuložený výběr) */
   const [currentPlaylistName, setCurrentPlaylistName] = useState<string | null>(null);
   const savedRef = useRef<SavedPlaylist[]>([]);
+  /** Uložené playlisty už jsou načtené – do té doby se soubory skladeb nemažou (mohl by je používat) */
+  const savedLoadedRef = useRef(false);
 
   // Aktuální hodnoty pro posluchače událostí (bez opakované registrace)
   const tracksRef = useRef<Track[]>([]);
@@ -61,6 +67,8 @@ export function useAudioPlayer() {
   const pausedAtRef = useRef<number | null>(null);
   /** Připravené data: URL (aktuální a následující skladba) – přepnutí bez čekání na převod */
   const urlCache = useRef(new Map<string, Promise<string>>());
+  /** Pauza při přepínání skladby – posluchač 'pause' ji nemá brát jako zastavení přehrávání */
+  const switchPauseRef = useRef(false);
 
   useEffect(() => { repeatModeRef.current = repeatMode; }, [repeatMode]);
   useEffect(() => { shuffleRef.current = shuffle; }, [shuffle]);
@@ -82,6 +90,7 @@ export function useAudioPlayer() {
       setIsLoaded(true);
     });
     loadSavedPlaylists().then((list) => {
+      savedLoadedRef.current = true;
       savedRef.current = list;
       setSavedPlaylists(list);
     });
@@ -97,6 +106,7 @@ export function useAudioPlayer() {
 
   /** Smaže soubory skladeb, které už nepoužívá fronta ani žádný uložený playlist */
   const releaseFiles = useCallback((candidateIds: string[], queue: Track[] = tracksRef.current) => {
+    if (!savedLoadedRef.current) return; // radši nechat soubor navíc než smazat skladbu z uloženého playlistu
     const used = new Set(queue.map((t) => t.id));
     for (const p of savedRef.current) for (const t of p.tracks) used.add(t.id);
     const unused = candidateIds.filter((id) => !used.has(id));
@@ -185,6 +195,7 @@ export function useAudioPlayer() {
       await new Promise((r) => setTimeout(r, FADE_MS));
       if (token !== loadToken.current) return;
     }
+    if (!audio.paused) switchPauseRef.current = true;
     audio.pause();
 
     let url: string;
@@ -260,11 +271,24 @@ export function useAudioPlayer() {
       loadAndPlay(next, true);
     };
 
+    // Pauza / přehrání zvenku (Android: hovor nebo jiná aplikace převezme zvuk, WebView přehrávání
+    // zastaví) → srovnat tlačítko i oznámení. Konec skladby (ended) a přepínání skladeb řeší jinde.
+    const onPause = () => {
+      if (switchPauseRef.current) { switchPauseRef.current = false; return; } // přepnutí skladby, hraje dál
+      if (audio.ended) return;
+      setIsPlaying(false);
+    };
+    const onPlay = () => setIsPlaying(true);
+
+    audio.addEventListener('pause', onPause);
+    audio.addEventListener('play', onPlay);
     audio.addEventListener('timeupdate', onTimeUpdate);
     audio.addEventListener('loadedmetadata', syncDuration);
     audio.addEventListener('durationchange', syncDuration);
     audio.addEventListener('ended', onEnded);
     return () => {
+      audio.removeEventListener('pause', onPause);
+      audio.removeEventListener('play', onPlay);
       audio.removeEventListener('timeupdate', onTimeUpdate);
       audio.removeEventListener('loadedmetadata', syncDuration);
       audio.removeEventListener('durationchange', syncDuration);
