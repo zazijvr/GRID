@@ -47,6 +47,8 @@ interface VisualizerStudioProps {
   repeatMode?: 'none' | 'all' | 'one';
   onToggleShuffle?: () => void;
   onCycleRepeat?: () => void;
+  /** Hraje živé rádio – místo času a posuvníku značka „Živě“ */
+  live?: boolean;
 }
 
 const EFFECTS: Array<() => Effect> = [createRing, createWave, createEqualizer, createHex, createLasers, createGalaxy];
@@ -66,7 +68,7 @@ const readSettings = (): { effect: number; auto: boolean } => {
 
 const formatTime = (s: number) => (Number.isFinite(s) && s > 0 ? `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}` : '0:00');
 
-export function VisualizerStudio({ audioRef, isPlaying, trackName, currentTime, duration, onClose, docked = false, onDragStart, side = 'left', fullscreen = false, onFullscreen, volume, onTogglePlay, onNext, onPrev, onSeek, onVolume, mobile = false, topLeft, bottomBar, dimmed = false, shuffle = false, repeatMode = 'none', onToggleShuffle, onCycleRepeat }: VisualizerStudioProps) {
+export function VisualizerStudio({ audioRef, isPlaying, trackName, currentTime, duration, onClose, docked = false, onDragStart, side = 'left', fullscreen = false, onFullscreen, volume, onTogglePlay, onNext, onPrev, onSeek, onVolume, mobile = false, topLeft, bottomBar, dimmed = false, shuffle = false, repeatMode = 'none', onToggleShuffle, onCycleRepeat, live = false }: VisualizerStudioProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const engineRef = useRef<VisualizerEngine | null>(null);
@@ -280,15 +282,21 @@ export function VisualizerStudio({ audioRef, isPlaying, trackName, currentTime, 
           <div className="max-w-3xl mx-auto">
             <div className="flex items-end justify-between gap-4">
               <div className="min-w-0">
-                <div className="text-[10px] tracking-[0.4em] uppercase text-cyan-300/70">{isPlaying ? 'Now playing' : 'Paused'}</div>
+                <div className="text-[10px] tracking-[0.4em] uppercase text-cyan-300/70">{live ? (isPlaying ? 'Rádio' : 'Rádio · pauza') : isPlaying ? 'Now playing' : 'Paused'}</div>
                 <div className="truncate text-lg md:text-2xl font-bold tracking-wide text-white drop-shadow-[0_0_12px_rgba(0,243,255,0.6)]">{trackName ?? 'GRID'}</div>
               </div>
-              <div className="shrink-0 font-mono text-xs text-slate-300/80 tabular-nums">
-                {formatTime(currentTime)} / {formatTime(duration)}
-              </div>
+              {live ? (
+                <div className="shrink-0 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.25em] text-pink-400">
+                  <span className={`w-2 h-2 rounded-full bg-pink-500 shadow-[0_0_8px_#f800ff] ${isPlaying ? 'animate-pulse' : 'opacity-40'}`} /> Živě
+                </div>
+              ) : (
+                <div className="shrink-0 font-mono text-xs text-slate-300/80 tabular-nums">
+                  {formatTime(currentTime)} / {formatTime(duration)}
+                </div>
+              )}
             </div>
             <div
-              className={`mt-2 relative ${showControls ? 'py-2 -my-2 cursor-pointer group' : ''}`}
+              className={`mt-2 relative ${live ? 'invisible' : ''} ${showControls ? 'py-2 -my-2 cursor-pointer group' : ''}`}
               onPointerDown={showControls ? (e) => {
                 if (duration <= 0) return;
                 const rect = e.currentTarget.getBoundingClientRect();

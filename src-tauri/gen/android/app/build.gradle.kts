@@ -18,7 +18,8 @@ android {
     compileSdk = 37
     namespace = "com.zvr_grid.app"
     defaultConfig {
-        manifestPlaceholders["usesCleartextTraffic"] = "false"
+        // Rádio: řada stanic vysílá jen přes http (stream i logo) – bez toho by v aplikaci nehrály
+        manifestPlaceholders["usesCleartextTraffic"] = "true"
         applicationId = "com.zvr_grid.app"
         minSdk = 24
         targetSdk = 37

@@ -23,6 +23,8 @@ export interface AudioGraph {
 }
 
 const graphs = new WeakMap<HTMLMediaElement, AudioGraph>();
+/** Všechny grafy (přehrávač souborů a rádio) – ekvalizér a hlasitost platí pro oba */
+const allGraphs = new Set<AudioGraph>();
 
 // Nastavení platí i před vytvořením grafu – použijí se při jeho vzniku
 let eqGains: EQGains = EQ_BANDS.map(() => 0);
@@ -81,6 +83,7 @@ export function ensureAudioGraph(audio: HTMLMediaElement): AudioGraph | null {
     audio.volume = 1;
     graph = { ctx, source, filters, analyser, bassAnalyser, gain };
     graphs.set(audio, graph);
+    allGraphs.add(graph);
   }
   // Při každém přehrání znovu rozběhnout – Chromium na Androidu kontext pozastaví / přeruší
   // (jiná aplikace, hovor, telefon na pozadí) a ten pak sám nenaběhne; zvuk by šel „do ticha“
@@ -91,13 +94,14 @@ export function ensureAudioGraph(audio: HTMLMediaElement): AudioGraph | null {
 /** Hlasitost 0–1: přes gain, nebo přímo na elementu, dokud graf neexistuje */
 export function setGraphVolume(audio: HTMLMediaElement | null, value: number) {
   volume = Math.max(0, Math.min(1, value));
-  const graph = getAudioGraph(audio);
-  if (graph) {
+  const own = getAudioGraph(audio);
+  for (const graph of allGraphs) {
+    // Ztlumený graf (pauza / přepínání) nechat ztlumený – hlasitost se vrátí při přehrání
+    if (graph !== own && graph.gain.gain.value === 0) continue;
     graph.gain.gain.cancelScheduledValues(graph.ctx.currentTime);
     graph.gain.gain.setValueAtTime(volume, graph.ctx.currentTime);
-  } else if (audio) {
-    audio.volume = volume;
   }
+  if (!own && audio) audio.volume = volume;
 }
 
 export const getVolume = () => volume;
@@ -152,10 +156,12 @@ export function restoreVolume(graph: AudioGraph) {
 
 export function setEqGains(audio: HTMLMediaElement | null, gains: EQGains) {
   eqGains = [...gains];
-  const graph = getAudioGraph(audio);
-  graph?.filters.forEach((f, i) => {
-    f.gain.value = eqGains[i] ?? 0;
-  });
+  void audio; // platí pro všechny grafy (přehrávač i rádio)
+  for (const graph of allGraphs) {
+    graph.filters.forEach((f, i) => {
+      f.gain.value = eqGains[i] ?? 0;
+    });
+  }
 }
 
 /** Průměrná úroveň (0–1) frekvenčního pásma loHz–hiHz z dat analyseru (getByteFrequencyData) */
@@ -172,5 +178,8 @@ export function bandLevel(data: Uint8Array, analyser: AnalyserNode, loHz: number
 /** Zavře AudioContext (při zavírání okna). Element zůstává svázaný se zavřeným grafem –
  *  createMediaElementSource na něj podruhé zavolat nejde, takže se z mapy neodebírá. */
 export function closeAudioGraph(audio: HTMLMediaElement | null) {
-  getAudioGraph(audio)?.ctx.close().catch(() => {});
+  const graph = getAudioGraph(audio);
+  if (!graph) return;
+  allGraphs.delete(graph);
+  graph.ctx.close().catch(() => {});
 }

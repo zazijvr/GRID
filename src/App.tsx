@@ -1,6 +1,6 @@
-import React, { useRef, useState, useCallback, useEffect, lazy, Suspense } from 'react';
+import React, { useRef, useState, useCallback, useEffect, useMemo, lazy, Suspense } from 'react';
 import {
-  Play, Pause, SkipForward, SkipBack, Shuffle, Repeat, Repeat1, FolderPlus, FolderOpen, Trash2, Volume2, VolumeX, Minimize2, X, MonitorPlay, Library
+  Play, Pause, SkipForward, SkipBack, Shuffle, Repeat, Repeat1, FolderPlus, FolderOpen, Trash2, Volume2, VolumeX, Minimize2, X, MonitorPlay, Library, Radio as RadioIcon
 } from 'lucide-react';
 import { useAudioPlayer } from './hooks/useAudioPlayer';
 import { closeAudioGraph } from './audio/audioGraph';
@@ -10,6 +10,8 @@ import { MobileLayout, type MobileSheet } from './components/MobileLayout';
 import { PlaylistsPanel } from './components/PlaylistsPanel';
 import { isAndroidApp, openWebsiteAndroid, postPlaybackState, setImmersive } from './platform/android';
 import { SpectrumVisualizer } from './components/SpectrumVisualizer';
+import { useRadio } from './radio/useRadio';
+import { RadioPanel } from './radio/RadioPanel';
 // three.js je velký – načte se až při otevření Visualizer Studia (rychlejší start přehrávače)
 const VisualizerStudio = lazy(() => import('./components/VisualizerStudio').then((m) => ({ default: m.VisualizerStudio })));
 import { Equalizer, EQButton } from './components/Equalizer';
@@ -20,6 +22,7 @@ const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/
 const PLAYER_WIDTH  = 350; // px – šířka přehrávače
 const EQ_PANEL_WIDTH = 280; // px – šířka EQ panelu
 const VIZ_WIDTH = 520; // px – visualizer vedle přehrávače (pevný malý formát, velký = celá obrazovka)
+const RADIO_HEIGHT = 860; // px – výška okna při otevřeném rádiu (počítač)
 const isTauri = () => !!window.__TAURI_INTERNALS__;
 /** Linux (počítač): okno nejde posunout doleva (Wayland) → pořadí přehrávač | visualizer | ekvalizér */
 const vizOnRight = /Linux/.test(navigator.userAgent) && !isMobile;
@@ -29,23 +32,23 @@ const ACCEPT_AUDIO = 'audio/*,.wav,.mp3,.flac,.ogg,.oga,.opus,.m4a,.aac,.wma,.we
 function App() {
   const {
     tracks,
-    currentTrack,
-    currentIndex,
-    isPlaying,
-    currentTime,
-    duration,
+    currentTrack: fileTrack,
+    currentIndex: fileIndex,
+    isPlaying: filePlaying,
+    currentTime: fileTime,
+    duration: fileDuration,
     repeatMode,
     shuffle,
     addFiles,
     openFiles,
     removeTrack,
     playTrack,
-    togglePlay,
-    nextTrack,
-    prevTrack,
+    togglePlay: fileToggle,
+    nextTrack: fileNext,
+    prevTrack: filePrev,
     cycleRepeat,
     toggleShuffle,
-    seek,
+    seek: fileSeek,
     volume,
     setVolume,
     isMuted,
@@ -58,6 +61,40 @@ function App() {
     deleteSavedPlaylist,
   } = useAudioPlayer();
 
+  // ── Rádio: když hraje stanice, ovládání (play, další, předchozí) patří jí ──
+  const fileToggleRef = useRef(fileToggle);
+  fileToggleRef.current = fileToggle;
+  const radio = useRadio({
+    volume,
+    // Spuštění stanice pozastaví hudbu ze souborů
+    onStart: () => { if (audioRef.current && !audioRef.current.paused) fileToggleRef.current(); },
+  });
+  const radioOn = radio.station !== null;
+  // Spuštění hudby ze souborů (klik na skladbu, nový playlist…) rádio vypne
+  const radioStopRef = useRef(radio.stop);
+  radioStopRef.current = radio.stop;
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    const onPlay = () => radioStopRef.current();
+    audio.addEventListener('play', onPlay);
+    return () => audio.removeEventListener('play', onPlay);
+  }, [audioRef]);
+  /** Element, který je právě slyšet – z něj čte vizualizace (rádio, jinak přehrávač souborů) */
+  const outputRef = useMemo<React.RefObject<HTMLAudioElement | null>>(
+    () => ({ get current() { return radio.activeElRef.current ?? audioRef.current; } }) as React.RefObject<HTMLAudioElement | null>,
+    [radio.activeElRef, audioRef],
+  );
+  const currentTrack = radioOn ? { id: `radio:${radio.station!.stationuuid}`, name: radio.station!.name } : fileTrack;
+  const currentIndex = radioOn ? -1 : fileIndex;
+  const isPlaying = radioOn ? radio.isPlaying : filePlaying;
+  const currentTime = radioOn ? 0 : fileTime;
+  const duration = radioOn ? 0 : fileDuration;
+  const togglePlay = radioOn ? radio.toggle : fileToggle;
+  const nextTrack = radioOn ? radio.next : fileNext;
+  const prevTrack = radioOn ? radio.prev : filePrev;
+  const seek = radioOn ? () => {} : fileSeek;
+
   const fileInputRef     = useRef<HTMLInputElement>(null);
   const fileInputOpenRef = useRef<HTMLInputElement>(null);
   const [isDragging,    setIsDragging]    = useState(false);
@@ -65,8 +102,15 @@ function App() {
   const [showEQ,         setShowEQ]        = useState(false);
   /** Telefon: otevřený vysouvací panel (seznam skladeb / ekvalizér) */
   const [mobileSheet, setMobileSheet] = useState<MobileSheet>('none');
-  /** Počítač: místo seznamu skladeb panel uložených playlistů */
-  const [showPlaylists, setShowPlaylists] = useState(false);
+  /** Počítač: místo seznamu skladeb panel uložených playlistů / rádia */
+  const [showPlaylists, setShowPlaylistsState] = useState(false);
+  const [showRadio, setShowRadioState] = useState(false);
+  const setShowPlaylists = (v: boolean | ((p: boolean) => boolean)) => {
+    setShowPlaylistsState((p) => { const n = typeof v === 'function' ? v(p) : v; if (n) setShowRadioState(false); return n; });
+  };
+  const setShowRadio = (v: boolean | ((p: boolean) => boolean)) => {
+    setShowRadioState((p) => { const n = typeof v === 'function' ? v(p) : v; if (n) setShowPlaylistsState(false); return n; });
+  };
   /** Úvodní animace při spuštění */
   const [showSplash, setShowSplash] = useState(true);
   /** Visualizer přes celý monitor (celá obrazovka okna) */
@@ -95,6 +139,33 @@ function App() {
     await win.setSize(new LogicalSize(width, size.height / scale));
   }, []);
   const fixedWidth = (eq: boolean) => PLAYER_WIDTH + (eq ? EQ_PANEL_WIDTH : 0);
+
+  // Rádio na počítači: pod přehrávačem je na seznam stanic málo místa → okno se na tu dobu prodlouží
+  // (nejvýš na výšku obrazovky) a po zavření panelu se vrátí na původní výšku
+  const heightBeforeRadio = useRef<number | null>(null);
+  const setWindowHeight = useCallback(async (open: boolean) => {
+    if (!isTauri() || isMobile) return;
+    try {
+      const [win, { LogicalSize }] = await Promise.all([tauriWindow(), import('@tauri-apps/api/dpi')]);
+      const [size, scale] = await Promise.all([win.innerSize(), win.scaleFactor()]);
+      const w = size.width / scale, h = size.height / scale;
+      if (open) {
+        const target = Math.min(RADIO_HEIGHT, window.screen.availHeight - 40);
+        if (target <= h) return;
+        heightBeforeRadio.current = h;
+        programmaticResize.current = Date.now();
+        await win.setSize(new LogicalSize(w, target));
+      } else if (heightBeforeRadio.current !== null) {
+        const back = heightBeforeRadio.current;
+        heightBeforeRadio.current = null;
+        programmaticResize.current = Date.now();
+        await win.setSize(new LogicalSize(w, back));
+      }
+    } catch (e) {
+      console.warn('Výšku okna nejde změnit', e);
+    }
+  }, []);
+  useEffect(() => { setWindowHeight(showRadio); }, [showRadio, setWindowHeight]);
 
   const toggleEQ = useCallback(() => {
     const next = !showEQ;
@@ -186,7 +257,7 @@ function App() {
     if (!isAndroidApp()) return;
     window.__gridMedia = (command: string) => {
       const m = mediaRef.current;
-      const paused = audioRef.current?.paused ?? true;
+      const paused = outputRef.current?.paused ?? true;
       if (command === 'play') { if (paused) m.togglePlay(); }
       else if (command === 'pause') { if (!paused) m.togglePlay(); }
       else if (command === 'toggle') m.togglePlay();
@@ -202,7 +273,7 @@ function App() {
       delete window.__gridMedia;
       delete window.__gridBack;
     };
-  }, [audioRef]);
+  }, [audioRef, outputRef]);
 
   const formatTime = (time: number) => {
     if (isNaN(time) || !isFinite(time)) return '0:00';
@@ -228,6 +299,7 @@ function App() {
   };
 
   const closeWindow = () => {
+    radio.stop();
     audioRef.current?.pause();
     closeAudioGraph(audioRef.current);
     if (isTauri()) tauriWindow().then((w) => w.close());
@@ -261,7 +333,7 @@ function App() {
       <Suspense fallback={null}>
         <VisualizerStudio
           docked
-          audioRef={audioRef}
+          audioRef={outputRef}
           isPlaying={isPlaying}
           trackName={currentTrack?.name ?? null}
           currentTime={currentTime}
@@ -276,6 +348,7 @@ function App() {
           side={vizOnRight ? 'right' : 'left'}
           fullscreen={vizFullscreen}
           onFullscreen={isTauri() ? setFullscreen : undefined}
+          live={radioOn}
           onDragStart={() => { if (isTauri()) tauriWindow().then((w) => w.startDragging()); }}
         />
       </Suspense>
@@ -287,7 +360,9 @@ function App() {
     return (
       <div className="relative w-full h-full overflow-hidden bg-black">
         <MobileLayout
-          audioRef={audioRef}
+          audioRef={outputRef}
+          radioOn={radioOn}
+          radioPanel={<RadioPanel radio={radio} onPlayed={() => setMobileSheet('none')} />}
           tracks={tracks}
           currentIndex={currentIndex}
           currentTrack={currentTrack}
@@ -305,6 +380,7 @@ function App() {
           onSeek={seek}
           onVolume={setVolume}
           onPlayTrack={(i) => { playTrack(i); setMobileSheet('none'); }}
+          live={radioOn}
           onRemoveTrack={removeTrack}
           onAddFiles={addFiles}
           onOpenFiles={(f) => { openFiles(f); setMobileSheet('none'); }}
@@ -394,7 +470,7 @@ function App() {
 
         {/* Main Info + Visualizer */}
         <div className="p-4 flex flex-col items-center justify-center shrink-0 border-b border-white/5 relative overflow-hidden group">
-          {currentTrack && <SpectrumVisualizer audioRef={audioRef} isPlaying={isPlaying} />}
+          {currentTrack && <SpectrumVisualizer audioRef={outputRef} isPlaying={isPlaying} />}
 
           <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-32 h-32 bg-cyan-500/10 blur-2xl rounded-full pointer-events-none" />
           {isPlaying && (
@@ -416,9 +492,9 @@ function App() {
                         <span className="eq-bar drop-shadow-[0_0_4px_rgba(0,243,255,0.8)]" style={{ animationDelay: '0.4s', animationDuration: '0.6s' }} />
                         <span className="eq-bar drop-shadow-[0_0_4px_rgba(248,0,255,0.8)] !bg-pink-500" style={{ animationDelay: '0.1s', animationDuration: '0.5s' }} />
                       </span>
-                      Playing
+                      {radioOn ? (radio.status === 'loading' ? 'Připojuji' : 'Rádio živě') : 'Playing'}
                     </span>
-                  ) : 'Paused'}
+                  ) : radioOn && radio.status === 'error' ? <span className="text-pink-400 normal-case tracking-normal">Stanice nejde přehrát</span> : 'Paused'}
                 </div>
               </>
             ) : (
@@ -426,7 +502,18 @@ function App() {
             )}
           </div>
 
-          {/* Progress Bar */}
+          {/* Rádio: místo posuvníku značka živého vysílání */}
+          {radioOn && (
+            <div className="w-full mt-4 h-10 flex items-center justify-center gap-3 z-10">
+              <span className="h-px flex-1 bg-gradient-to-r from-transparent to-cyan-500/40" />
+              <span className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.25em] text-pink-400">
+                <span className={`w-2 h-2 rounded-full bg-pink-500 shadow-[0_0_8px_#f800ff] ${radio.status === 'playing' ? 'animate-pulse' : 'opacity-40'}`} />
+                Živě
+              </span>
+              <span className="h-px flex-1 bg-gradient-to-l from-transparent to-cyan-500/40" />
+            </div>
+          )}
+          {!radioOn && (
           <div className="w-full mt-4 flex items-center gap-3 text-xs text-slate-400 font-mono z-10">
             <span className="font-medium drop-shadow-sm text-cyan-400/80">{formatTime(currentTime)}</span>
             <div
@@ -474,6 +561,10 @@ function App() {
             </div>
             <span className="font-medium drop-shadow-sm text-pink-500/80">{formatTime(duration)}</span>
           </div>
+          )}
+          {radioOn && !radio.fx && radio.status === 'playing' && (
+            <div className="z-10 -mt-1 text-[10px] text-slate-500 text-center">Tahle stanice nepovoluje ekvalizér ani vizualizaci</div>
+          )}
         </div>
 
         {/* Controls */}
@@ -602,8 +693,15 @@ function App() {
           </div>
         )}
 
+        {/* Rádio (místo seznamu skladeb) */}
+        {showRadio && (
+          <div className="flex-1 min-h-0 flex flex-col bg-slate-900 border-t border-white/5 pt-1">
+            <RadioPanel radio={radio} compact onClose={() => setShowRadio(false)} />
+          </div>
+        )}
+
         {/* Playlist */}
-        <div className={`flex-1 overflow-y-auto bg-slate-900 p-2 border-t border-white/5 relative ${showPlaylists ? 'hidden' : ''}`}>
+        <div className={`flex-1 overflow-y-auto bg-slate-900 p-2 border-t border-white/5 relative ${showPlaylists || showRadio ? 'hidden' : ''}`}>
           {currentPlaylistName && tracks.length > 0 && (
             <div className="px-3 pb-1.5 text-[10px] uppercase tracking-[0.2em] text-pink-400/80 truncate">{currentPlaylistName}</div>
           )}
@@ -672,6 +770,15 @@ function App() {
           >
             <Library size={16} />
           </button>
+
+          <button
+            onClick={() => setShowRadio((v) => !v)}
+            title="Rádio"
+            aria-pressed={showRadio}
+            className={`shrink-0 flex items-center justify-center px-3 rounded-md border transition-all duration-300 ${showRadio || radioOn ? 'border-pink-500 text-pink-400 bg-pink-500/10' : 'border-slate-700 bg-slate-900 text-slate-300 hover:border-cyan-500/60 hover:text-cyan-400'}`}
+          >
+            <RadioIcon size={16} />
+          </button>
         </div>
       </div>
       {/* ── END LEFT COLUMN ── */}
@@ -698,7 +805,7 @@ function App() {
       {showVisualizer && isMobile && (
         <Suspense fallback={null}>
           <VisualizerStudio
-            audioRef={audioRef}
+            audioRef={outputRef}
             isPlaying={isPlaying}
             trackName={currentTrack?.name ?? null}
             currentTime={currentTime}
@@ -712,6 +819,7 @@ function App() {
             onVolume={setVolume}
             fullscreen={vizFullscreen}
             onFullscreen={isAndroidApp() ? setFullscreen : undefined}
+            live={radioOn}
           />
         </Suspense>
       )}
