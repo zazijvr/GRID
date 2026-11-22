@@ -57,6 +57,17 @@ jobs:
 
       # Zazij VR Grid neobsahuje Tauri v package.json závislostech automaticky,
       # musí se spustit přes Bun runner anebo nechat Tauri action stáhnout Tauri cli
+      # Popis vydání ze souboru release-notes.md (zobrazí ho i přehrávač u nabídky aktualizace)
+      - name: Release notes
+        id: notes
+        shell: bash
+        run: |
+          {
+            echo 'body<<NOTES_EOF'
+            if [ -f release-notes.md ]; then cat release-notes.md; else echo 'Automatický build pro hudební aplikaci GRID.'; fi
+            echo 'NOTES_EOF'
+          } >> "$GITHUB_OUTPUT"
+
       - name: Build Tauri app
         uses: tauri-apps/tauri-action@v0
         env:
@@ -65,6 +76,6 @@ jobs:
           args: ${{ matrix.args }}
           tagName: "v__VERSION__"
           releaseName: "GRID Desktop v__VERSION__"
-          releaseBody: "Automatický build pro hudební aplikaci GRID."
+          releaseBody: ${{ steps.notes.outputs.body }}
           releaseDraft: false
           prerelease: false

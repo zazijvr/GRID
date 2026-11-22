@@ -7,12 +7,18 @@
 //    (prohlížeč by přes graf pustil jen ticho).
 // Živý stream se po pauze nenavazuje (hrál by se starý kus) – pokračování stanici načte znovu.
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ensureAudioGraph, getAudioGraph, muteNow, restoreVolume } from '../audio/audioGraph';
+import { closeAudioGraph, ensureAudioGraph, getAudioGraph, muteNow, restoreVolume } from '../audio/audioGraph';
 import { reportClick, streamUrl, type SavedStation, type Station } from './radioBrowser';
 
 export type RadioStatus = 'idle' | 'loading' | 'playing' | 'paused' | 'error';
 
 const FAVS_KEY = 'zvr-grid-radio-favs';
+
+/** Linux (WebKitGTK): přepnutí streamu na elementu připojeném do grafu umí rozbít zvukový řetězec
+ *  (prasknutí, pak ticho) → každá stanice dostane nový element i graf, starý se zavře.
+ *  Pozor: hlasitost ani ztlumení elementu tu neměnit – PipeWire si je pamatuje pro celou aplikaci
+ *  a přeneslo by je i na přehrávač souborů. */
+const WEBKITGTK = /Linux/.test(navigator.userAgent) && !/Android/.test(navigator.userAgent);
 
 const toSaved = (s: Station | SavedStation): SavedStation => ({
   stationuuid: s.stationuuid, name: s.name.trim(), url_resolved: s.url_resolved, url: s.url, favicon: s.favicon,
@@ -51,21 +57,34 @@ export function useRadio({ volume, onStart }: { volume: number; onStart: () => v
   const [fx, setFx] = useState(true);
   const [favourites, setFavourites] = useState<SavedStation[]>(readFavs);
 
-  const els = () => {
+  const watch = (el: HTMLAudioElement) => {
+    // Události jen z elementu, který právě hraje
+    el.addEventListener('waiting', () => { if (activeElRef.current === el) setStatus('loading'); });
+    el.addEventListener('playing', () => { if (activeElRef.current === el) setStatus('playing'); });
+    // Pauza zvenku (Android: hovor, jiná aplikace převzala zvuk)
+    el.addEventListener('pause', () => { if (activeElRef.current === el && el.getAttribute('src')) setStatus((s) => (s === 'error' ? s : 'paused')); });
+    el.addEventListener('error', () => { if (activeElRef.current === el && el.getAttribute('src')) setStatus('error'); });
+  };
+  const makeFx = () => {
+    const fxEl = new Audio();
+    fxEl.crossOrigin = 'anonymous';
+    fxEl.preload = 'none';
+    watch(fxEl);
+    return fxEl;
+  };
+  const els = (fresh = false) => {
+    if (fresh && fxRef.current) {
+      // Linux: starý element i jeho graf pryč, nová stanice začíná s čistým řetězcem
+      unload(fxRef.current);
+      closeAudioGraph(fxRef.current);
+      if (activeElRef.current === fxRef.current) activeElRef.current = null;
+      fxRef.current = makeFx();
+    }
     if (!fxRef.current) {
-      const fxEl = new Audio();
-      fxEl.crossOrigin = 'anonymous';
-      fxEl.preload = 'none';
+      const fxEl = makeFx();
       const plainEl = new Audio();
       plainEl.preload = 'none';
-      for (const el of [fxEl, plainEl]) {
-        // Události jen z elementu, který právě hraje
-        el.addEventListener('waiting', () => { if (activeElRef.current === el) setStatus('loading'); });
-        el.addEventListener('playing', () => { if (activeElRef.current === el) setStatus('playing'); });
-        // Pauza zvenku (Android: hovor, jiná aplikace převzala zvuk)
-        el.addEventListener('pause', () => { if (activeElRef.current === el && el.getAttribute('src')) setStatus((s) => (s === 'error' ? s : 'paused')); });
-        el.addEventListener('error', () => { if (activeElRef.current === el && el.getAttribute('src')) setStatus('error'); });
-      }
+      watch(plainEl);
       fxRef.current = fxEl;
       plainRef.current = plainEl;
     }
@@ -87,7 +106,7 @@ export function useRadio({ volume, onStart }: { volume: number; onStart: () => v
     setStation(st);
     setStatus('loading');
 
-    const { fxEl, plainEl } = els();
+    const { fxEl, plainEl } = els(WEBKITGTK);
     unload(plainEl);
     const url = streamUrl(st);
 

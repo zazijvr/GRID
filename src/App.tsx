@@ -12,6 +12,9 @@ import { isAndroidApp, openWebsiteAndroid, postPlaybackState, setImmersive } fro
 import { SpectrumVisualizer } from './components/SpectrumVisualizer';
 import { useRadio } from './radio/useRadio';
 import { RadioPanel } from './radio/RadioPanel';
+import { useUpdate } from './update/useUpdate';
+import { version as APP_VERSION } from '../package.json';
+import { UpdateBadge, UpdatePanel } from './update/UpdatePanel';
 // three.js je velký – načte se až při otevření Visualizer Studia (rychlejší start přehrávače)
 const VisualizerStudio = lazy(() => import('./components/VisualizerStudio').then((m) => ({ default: m.VisualizerStudio })));
 import { Equalizer, EQButton } from './components/Equalizer';
@@ -116,6 +119,9 @@ function App() {
   /** Visualizer přes celý monitor (celá obrazovka okna) */
   const [vizFullscreen, setVizFullscreen] = useState(false);
   const [activePreset,   setActivePreset]  = useState<EQPreset>('flat');
+  // Nová verze (jen počítač – telefon aktualizuje Google Play)
+  const update = useUpdate(!isMobile);
+  const [showUpdate, setShowUpdate] = useState(false);
 
   const [scrubbingTime, setScrubbingTime] = useState<number | null>(null);
   const [hoverProgress, setHoverProgress] = useState<number | null>(null);
@@ -437,8 +443,10 @@ function App() {
               >
                 <img src="/logo.png" alt="Zažij VR" className="grid-neon-logo h-6 object-contain" draggable={false} />
               </button>
+              <span className="text-[10px] font-medium tracking-wider text-slate-500 normal-case drop-shadow-none" title={`GRID verze ${APP_VERSION}`}>v{APP_VERSION}</span>
             </div>
             <div className="flex items-center gap-1.5">
+              <UpdateBadge update={update} onClick={() => setShowUpdate(true)} />
               {/* EQ toggle button */}
               <EQButton active={showEQ} onClick={toggleEQ} preset={activePreset} />
 
@@ -798,6 +806,8 @@ function App() {
       )}
 
       <audio ref={audioRef} preload="auto" className="hidden" />
+
+      {showUpdate && <UpdatePanel update={update} onClose={() => setShowUpdate(false)} />}
 
       {showSplash && <SplashScreen onDone={() => setShowSplash(false)} />}
 

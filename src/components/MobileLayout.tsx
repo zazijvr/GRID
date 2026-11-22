@@ -5,6 +5,7 @@ import type { SavedPlaylist } from '../audio/trackStore';
 import type { Track } from '../hooks/useAudioPlayer';
 import { Equalizer, type EQPreset } from './Equalizer';
 import { DancingMascot } from '../mascot/DancingMascot';
+import { version as APP_VERSION } from '../../package.json';
 
 // Telefon: hlavní obrazovka „Teď hraje“ je visualizer přes celou plochu; seznam skladeb a ekvalizér
 // se vysouvají zespodu. Prázdný playlist = uvítání s tančícím panáčkem a tlačítkem Přidat hudbu.
@@ -214,6 +215,7 @@ export function MobileLayout(p: MobileLayoutProps) {
             <Library size={18} /> Moje playlisty ({p.savedPlaylists.length})
           </button>
         )}
+        <div className="absolute inset-x-0 text-center text-[10px] tracking-[0.2em] text-slate-600" style={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + 12px)' }}>GRID {APP_VERSION}</div>
       </div>
     );
   }
@@ -321,6 +323,7 @@ export function MobileLayout(p: MobileLayoutProps) {
           <button onClick={() => p.setSheet('none')} className="py-3 rounded-xl text-sm font-semibold text-slate-400 active:bg-white/5">
             Zrušit
           </button>
+          <div className="-mt-1 text-center text-[10px] tracking-[0.2em] text-slate-600">GRID {APP_VERSION}</div>
         </div>
       </BottomSheet>
 

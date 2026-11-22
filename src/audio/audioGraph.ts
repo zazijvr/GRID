@@ -1,6 +1,10 @@
 // Zvukový graf Web Audio pro přehrávač – jeden na <audio> element:
 //
-//   <audio> → MediaElementSource → EQ (10 filtrů) → analyser → gain (hlasitost) → reproduktory
+//   <audio> → MediaElementSource → EQ (10 filtrů) → analyser → gain (hlasitost) → pojistka → reproduktory
+//
+// - Pojistka (AudioWorklet, public/grid-guard-worklet.js) nepustí do systému NaN / nekonečno – ty by
+//   v PipeWire umlčely zvuk všech aplikací. Při výskytu se filtry ekvalizéru vytvoří znovu
+//   (jejich vnitřní stav po NaN zůstane rozbitý a hrálo by už jen ticho).
 //
 // - Analyser je za ekvalizérem a před hlasitostí: vizualizace ukazuje to, co je slyšet,
 //   a nezmizí při ztišení.
@@ -32,6 +36,60 @@ let volume = 1;
 
 type AudioContextCtor = typeof AudioContext;
 
+function makeFilters(ctx: BaseAudioContext): BiquadFilterNode[] {
+  return EQ_BANDS.map((freq, i) => {
+    const f = ctx.createBiquadFilter();
+    f.type = i === 0 ? 'lowshelf' : i === EQ_BANDS.length - 1 ? 'highshelf' : 'peaking';
+    f.frequency.value = freq;
+    f.Q.value = 1.4;
+    f.gain.value = eqGains[i] ?? 0;
+    return f;
+  });
+}
+
+/** Nové filtry ekvalizéru místo starých (po NaN mají rozbitý vnitřní stav) */
+function rebuildFilters(graph: AudioGraph) {
+  try {
+    graph.source.disconnect();
+    graph.filters.forEach((f) => f.disconnect());
+    const filters = makeFilters(graph.ctx);
+    graph.source.connect(filters[0]);
+    for (let i = 0; i < filters.length - 1; i++) filters[i].connect(filters[i + 1]);
+    filters[filters.length - 1].connect(graph.analyser);
+    graph.filters = filters;
+  } catch (e) {
+    console.warn('Ekvalizér se nepodařilo obnovit', e);
+  }
+}
+
+let guardModule: WeakMap<BaseAudioContext, Promise<void>> = new WeakMap();
+/** Zařadí pojistku mezi hlasitost a reproduktory (jakmile se načte; do té doby hraje graf bez ní) */
+function installGuard(graph: AudioGraph) {
+  const { ctx } = graph;
+  if (!ctx.audioWorklet || typeof AudioWorkletNode === 'undefined') return;
+  let loading = guardModule.get(ctx);
+  if (!loading) {
+    loading = ctx.audioWorklet.addModule('/grid-guard-worklet.js');
+    guardModule.set(ctx, loading);
+  }
+  loading
+    .then(() => {
+      if (ctx.state === 'closed') return;
+      const guard = new AudioWorkletNode(ctx, 'grid-guard', { outputChannelCount: [2] });
+      guard.port.onmessage = () => {
+        console.warn('Zvuk obsahoval neplatná data – ekvalizér obnoven');
+        rebuildFilters(graph);
+      };
+      graph.gain.disconnect();
+      graph.gain.connect(guard);
+      guard.connect(ctx.destination);
+    })
+    .catch((e) => {
+      guardModule = new WeakMap();
+      console.warn('Pojistka zvuku není k dispozici', e);
+    });
+}
+
 export function getAudioGraph(audio: HTMLMediaElement | null): AudioGraph | null {
   return audio ? graphs.get(audio) ?? null : null;
 }
@@ -49,14 +107,7 @@ export function ensureAudioGraph(audio: HTMLMediaElement): AudioGraph | null {
     const ctx = new Ctor({ latencyHint: 'interactive' });
     const source = ctx.createMediaElementSource(audio);
 
-    const filters = EQ_BANDS.map((freq, i) => {
-      const f = ctx.createBiquadFilter();
-      f.type = i === 0 ? 'lowshelf' : i === EQ_BANDS.length - 1 ? 'highshelf' : 'peaking';
-      f.frequency.value = freq;
-      f.Q.value = 1.4;
-      f.gain.value = eqGains[i] ?? 0;
-      return f;
-    });
+    const filters = makeFilters(ctx);
 
     const analyser = ctx.createAnalyser();
     analyser.fftSize = 2048; // 1024 pásem – vizualizace si je seskupí podle frekvencí
@@ -84,6 +135,7 @@ export function ensureAudioGraph(audio: HTMLMediaElement): AudioGraph | null {
     graph = { ctx, source, filters, analyser, bassAnalyser, gain };
     graphs.set(audio, graph);
     allGraphs.add(graph);
+    installGuard(graph);
   }
   // Při každém přehrání znovu rozběhnout – Chromium na Androidu kontext pozastaví / přeruší
   // (jiná aplikace, hovor, telefon na pozadí) a ten pak sám nenaběhne; zvuk by šel „do ticha“
