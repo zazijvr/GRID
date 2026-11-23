@@ -1,7 +1,7 @@
 // Rádio: hledání v katalogu stanic (název, země, žánr) a oblíbené stanice.
 // Stejný panel na počítači (místo seznamu skladeb) i na telefonu (vysouvací panel).
-import { useEffect, useRef, useState } from 'react';
-import { Loader2, Radio as RadioIcon, Search, Square, Star, X } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Check, ChevronDown, Loader2, Radio as RadioIcon, Search, Square, Star, X } from 'lucide-react';
 import { GENRES, getCountries, searchStations, type Country, type SavedStation, type Station } from './radioBrowser';
 import type { Radio } from './useRadio';
 
@@ -23,6 +23,91 @@ function StationLogo({ src, active }: { src: string; active: boolean }) {
         <RadioIcon size={16} className={active ? 'text-pink-400' : 'text-cyan-400/60'} />
       ) : (
         <img src={src} alt="" loading="lazy" referrerPolicy="no-referrer" draggable={false} className="w-full h-full object-contain bg-white/5" onError={() => setFailed(true)} />
+      )}
+    </div>
+  );
+}
+
+/** Výběr země – vlastní rozbalovací seznam (systémový <select> má na Linuxu bílý, nečitelný seznam) */
+function CountryPicker({ value, onChange, pinned, others, compact }: {
+  value: string; onChange: (code: string) => void; pinned: Country[]; others: Country[]; compact: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const [filter, setFilter] = useState('');
+  /** Místo pod tlačítkem (nebo nad ním) – seznam se nesmí vysunout mimo okno */
+  const [room, setRoom] = useState<{ up: boolean; max: number }>({ up: false, max: 240 });
+  const rootRef = useRef<HTMLDivElement>(null);
+  const toggle = () => {
+    const r = rootRef.current?.getBoundingClientRect();
+    if (r && !open) {
+      const below = window.innerHeight - r.bottom - 16;
+      const above = r.top - 16;
+      const up = below < 200 && above > below;
+      setRoom({ up, max: Math.max(100, Math.min(240, (up ? above : below) - 46)) });
+    }
+    setOpen((o) => !o);
+  };
+  const all = useMemo(() => [...pinned, ...others], [pinned, others]);
+  const label = value ? all.find((c) => c.code === value)?.name ?? value : 'Celý svět';
+
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: PointerEvent) => { if (!rootRef.current?.contains(e.target as Node)) setOpen(false); };
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false); };
+    document.addEventListener('pointerdown', onDown);
+    document.addEventListener('keydown', onKey);
+    return () => { document.removeEventListener('pointerdown', onDown); document.removeEventListener('keydown', onKey); };
+  }, [open]);
+
+  const q = filter.trim().toLocaleLowerCase('cs');
+  const match = (c: Country) => !q || c.name.toLocaleLowerCase('cs').includes(q) || c.code.toLowerCase() === q;
+  const pick = (code: string) => { onChange(code); setOpen(false); setFilter(''); };
+  const item = (code: string, name: string, count?: number) => (
+    <button
+      key={code || 'all'}
+      type="button"
+      onClick={() => pick(code)}
+      className={`w-full flex items-center gap-2 px-3 py-1.5 text-left text-xs rounded-md ${value === code ? 'text-cyan-300 bg-cyan-500/10' : 'text-slate-200 hover:bg-white/5'}`}
+    >
+      <span className="flex-1 truncate">{name}</span>
+      {count !== undefined && <span className="text-slate-500 tabular-nums">{count}</span>}
+      {value === code && <Check size={12} className="text-cyan-300" />}
+    </button>
+  );
+  const pinnedShown = pinned.filter(match);
+  const othersShown = others.filter(match);
+
+  return (
+    <div ref={rootRef} className={`relative ${compact ? 'w-[118px] shrink-0' : 'w-full'}`}>
+      <button
+        type="button"
+        onClick={toggle}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-label="Země"
+        className={`w-full flex items-center gap-1.5 bg-slate-900 border rounded-lg text-white text-left ${open ? 'border-cyan-500' : 'border-slate-700'} ${compact ? 'px-2 py-1.5 text-xs' : 'px-3 py-2 text-sm'}`}
+      >
+        <span className="flex-1 truncate">{label}</span>
+        <ChevronDown size={14} className={`shrink-0 text-slate-400 transition-transform ${open ? 'rotate-180' : ''}`} />
+      </button>
+      {open && (
+        <div className={`absolute z-30 ${room.up ? 'bottom-full mb-1' : 'top-full mt-1'} ${compact ? 'right-0 w-[230px]' : 'inset-x-0'} rounded-xl border border-cyan-500/40 bg-slate-950 shadow-[0_8px_30px_rgba(0,0,0,0.6),0_0_15px_rgba(0,243,255,0.15)] p-1.5`}>
+          <input
+            autoFocus
+            value={filter}
+            onChange={(e) => setFilter(e.target.value)}
+            placeholder="Hledat zemi…"
+            className="w-full mb-1 bg-slate-900 border border-slate-700 rounded-md px-2.5 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 select-text"
+          />
+          <div className="overflow-y-auto" style={{ maxHeight: room.max }} role="listbox">
+            {!q && item('', 'Celý svět')}
+            {pinnedShown.map((c) => item(c.code, c.name, c.count))}
+            {!q && pinnedShown.length > 0 && othersShown.length > 0 && <div className="my-1 border-t border-white/10" />}
+            {othersShown.map((c) => item(c.code, c.name, c.count))}
+            {all.length === 0 && <div className="px-3 py-2 text-xs text-slate-500">Načítám seznam zemí…</div>}
+            {all.length > 0 && q && pinnedShown.length + othersShown.length === 0 && <div className="px-3 py-2 text-xs text-slate-500">Žádná země</div>}
+          </div>
+        </div>
       )}
     </div>
   );
@@ -161,18 +246,7 @@ export function RadioPanel({ radio, onPlayed, compact = false, onClose }: { radi
               </button>
             )}
           </div>
-          <select
-            value={country}
-            onChange={(e) => setCountry(e.target.value)}
-            aria-label="Země"
-            className={`${compact ? 'w-[118px] shrink-0 px-2 py-1.5 text-xs' : 'w-full px-3 py-2 text-sm'} bg-slate-900 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-cyan-500`}
-          >
-            <option value="">Celý svět</option>
-            {pinned.map((c) => <option key={c.code} value={c.code}>{c.name} ({c.count})</option>)}
-            {others.length > 0 && <option disabled>──────────</option>}
-            {others.map((c) => <option key={c.code} value={c.code}>{c.name} ({c.count})</option>)}
-            {countries.length === 0 && country && <option value={country}>{country}</option>}
-          </select>
+          <CountryPicker value={country} onChange={setCountry} pinned={pinned} others={others} compact={compact} />
           </div>
           <div className="flex gap-1.5 overflow-x-auto pb-1 -mx-1 px-1" style={{ scrollbarWidth: 'none' }}>
             {GENRES.map((g) => (
