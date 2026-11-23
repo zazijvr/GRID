@@ -288,20 +288,23 @@ function App() {
     return `${m}:${s.toString().padStart(2, '0')}`;
   };
 
+  /** Po výběru skladeb ukázat seznam skladeb (zavřít panel rádia / playlistů, které ho překrývají) */
+  const showTrackList = () => { setShowRadio(false); setShowPlaylists(false); };
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files.length > 0) addFiles(Array.from(e.target.files));
+    if (e.target.files && e.target.files.length > 0) { addFiles(Array.from(e.target.files)); showTrackList(); }
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
   const handleFileOpen = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files.length > 0) openFiles(Array.from(e.target.files));
+    if (e.target.files && e.target.files.length > 0) { openFiles(Array.from(e.target.files)); showTrackList(); }
     if (fileInputOpenRef.current) fileInputOpenRef.current.value = '';
   };
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     setIsDragging(false);
-    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) addFiles(Array.from(e.dataTransfer.files));
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) { addFiles(Array.from(e.dataTransfer.files)); showTrackList(); }
   };
 
   const closeWindow = () => {
