@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { ensureAudioGraph, fadeOut, getAudioGraph, muteNow, restoreVolume, setGraphVolume, waitForDrain } from '../audio/audioGraph';
 import {
-  deleteBlobs, getBlob, loadPlaylist, loadSavedPlaylists, playableUrl, putBlobs, releaseUrl, saveOrder, writeSavedPlaylists,
+  BUILTIN_PLAYLIST_NAME, BUILTIN_TRACKS, deleteBlobs, getBlob, loadPlaylist, loadSavedPlaylists, playableUrl, putBlobs, releaseUrl, saveOrder, writeSavedPlaylists,
   type SavedPlaylist, type TrackMeta,
 } from '../audio/trackStore';
 
@@ -15,6 +15,8 @@ const isAudioFile = (f: File) =>
   !PLAYLIST_EXT.test(f.name) && !/mpegurl|scpls|xspf/i.test(f.type) && (f.type.startsWith('audio/') || AUDIO_EXT.test(f.name));
 
 const VOLUME_KEY = 'zvr-grid-volume';
+/** Přibalené skladby už byly jednou přidané (uživatel je pak může smazat a nevrátí se) */
+const BUILTIN_SEEDED_KEY = 'zvr-grid-builtin-seeded';
 /** Telefon: hlasitost řídí jen systém (tlačítka, sluchátka) – aplikace hraje naplno, jinak by
  *  stažená hlasitost v aplikaci omezovala i systémovou (a dřív uložená nízká hodnota by zůstala). */
 const SYSTEM_VOLUME = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
@@ -83,16 +85,30 @@ export function useAudioPlayer() {
     setCurrentIndex(index);
   }, []);
 
-  // Playlist z minula + uložené playlisty
+  // Playlist z minula + uložené playlisty. Poprvé (i po aktualizaci na verzi s přibalenými skladbami)
+  // přibude uložený playlist „ZažijVR GRID“ a prázdná fronta dostane přibalené skladby.
   useEffect(() => {
-    loadPlaylist().then((saved) => {
-      if (saved.length > 0) commitTracks(saved);
-      setIsLoaded(true);
-    });
-    loadSavedPlaylists().then((list) => {
+    let seeded = true;
+    try {
+      seeded = localStorage.getItem(BUILTIN_SEEDED_KEY) === '1';
+      localStorage.setItem(BUILTIN_SEEDED_KEY, '1'); // hned – dvojí spuštění efektu (StrictMode) nepřidá dvakrát
+    } catch { /* bez úložiště nic nepřidávat */ }
+    Promise.all([loadPlaylist(), loadSavedPlaylists()]).then(([saved, list]) => {
+      if (!seeded) {
+        if (!list.some((p) => p.name.toLowerCase() === BUILTIN_PLAYLIST_NAME.toLowerCase())) {
+          list = [...list, { id: crypto.randomUUID(), name: BUILTIN_PLAYLIST_NAME, tracks: BUILTIN_TRACKS.map((t) => ({ ...t })), updatedAt: Date.now() }];
+          writeSavedPlaylists(list).catch((e) => console.warn('Playlist se nepodařilo uložit', e));
+        }
+        if (saved.length === 0) {
+          saved = BUILTIN_TRACKS.map((t) => ({ ...t }));
+          setCurrentPlaylistName(BUILTIN_PLAYLIST_NAME);
+        }
+      }
       savedLoadedRef.current = true;
       savedRef.current = list;
       setSavedPlaylists(list);
+      if (saved.length > 0) commitTracks(saved);
+      setIsLoaded(true);
     });
     try { setCurrentPlaylistName(localStorage.getItem('zvr-grid-current-playlist')); } catch { /* jen se nezapamatuje */ }
   }, [commitTracks]);
@@ -525,5 +541,6 @@ export function useAudioPlayer() {
     isMuted,
     toggleMute,
     audioRef,
+    isLoaded,
   };
 }

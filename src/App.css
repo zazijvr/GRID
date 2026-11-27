@@ -1,9 +1,43 @@
 @import "tailwindcss";
 
+/* Firemní barvy ZažijVR (stejné jako web, poukazy a 00-PREHLED v ZazijVR-grafika):
+   neon #01daf6 = hlavní, růžová #e425a5 = jen doplněk, pozadí #061026, karty #0b1733, zvýraznění #152e50.
+   Paleta Tailwindu je přemapovaná, takže stávající třídy (cyan-*, pink-*, slate-*) mají barvy značky;
+   fialová se nepoužívá (purple-* = odstíny neonu). Efekty vizualizéru (src/visualizer) mají vlastní barvy – beze změny. */
 @theme {
-  --color-neon-blue: #00f3ff;
-  --color-neon-pink: #f800ff;
-  --color-dark-bg: #0f172a;
+  --color-neon-blue: #01daf6;
+  --color-neon-pink: #e425a5;
+  --color-dark-bg: #061026;
+
+  --color-cyan-100: #e6fdff;
+  --color-cyan-200: #b4f5fd;
+  --color-cyan-300: #6aebfa;
+  --color-cyan-400: #01daf6;
+  --color-cyan-500: #01c0d9;
+  --color-cyan-600: #0199ad;
+
+  --color-pink-100: #fbe3f3;
+  --color-pink-200: #f6c2e5;
+  --color-pink-300: #ef8fcf;
+  --color-pink-400: #e95cba;
+  --color-pink-500: #e425a5;
+  --color-pink-600: #c11a8a;
+
+  --color-purple-200: #d2fdff;
+  --color-purple-300: #9cf0fb;
+  --color-purple-400: #4fe3f8;
+  --color-purple-500: #01daf6;
+
+  --color-slate-100: #eef2f8;
+  --color-slate-200: #d9e0ec;
+  --color-slate-300: #b7c2d6;
+  --color-slate-400: #8d9bb5;
+  --color-slate-500: #66789a;
+  --color-slate-600: #3e5478;
+  --color-slate-700: #24406a;
+  --color-slate-800: #152e50;
+  --color-slate-900: #0b1733;
+  --color-slate-950: #061026;
 }
 
 html, body {
@@ -37,11 +71,11 @@ html.opaque-window body {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: rgba(0, 243, 255, 0.2);
+  background: rgba(1,218,246, 0.2);
   border-radius: 4px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(0, 243, 255, 0.5);
+  background: rgba(1,218,246, 0.5);
 }
 
 /* Logo ZažijVR: občas neonově problikne a rozzáří se (stejně jako v Moje Káře) */

@@ -1,0 +1,5 @@
+<resources>
+    <!-- Testovací build (debug): vlastní název, aby šel nainstalovat vedle verze z Google Play -->
+    <string name="app_name">GRID TST</string>
+    <string name="main_activity_title">GRID TST</string>
+</resources>

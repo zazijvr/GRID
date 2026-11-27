@@ -8,6 +8,12 @@ const SHOW_MS = 2800;
 const FADE_MS = 500;
 const BARS = 72;
 
+/** Barva mezi neonem #01daf6 (t = 0) a růžovou #e425a5 (t = 1) jako „r, g, b“ */
+const brandMix = (t: number) => {
+  const k = Math.max(0, Math.min(1, t));
+  return [[1, 228], [218, 37], [246, 165]].map(([a, b]) => Math.round(a + (b - a) * k)).join(', ');
+};
+
 /**
  * Úvodní animace: VR panáček se sluchátky pokyvuje hlavou do rytmu, kolem něj neonové kruhové
  * spektrum (jako Neon Ring), které na každou dobu pulzne a vystřelí jiskry. Klepnutím se přeskočí.
@@ -80,9 +86,10 @@ export function SplashScreen({ onDone }: { onDone: () => void }) {
         const k = i < BARS / 2 ? i : BARS - 1 - i;
         const a = -Math.PI / 2 + ((i + 0.5) / BARS) * Math.PI * 2;
         const len = 6 + levels[i] * Math.min(w, h) * 0.16;
-        const hue = 185 + (k / (BARS / 2)) * 140;
-        ctx.strokeStyle = `hsla(${hue}, 100%, 62%, 0.9)`;
-        ctx.shadowColor = `hsla(${hue}, 100%, 60%, 1)`;
+        // přechod neon → růžová (firemní barvy, bez fialové uprostřed)
+        const c = brandMix(k / (BARS / 2));
+        ctx.strokeStyle = `rgba(${c}, 0.9)`;
+        ctx.shadowColor = `rgb(${c})`;
         ctx.lineWidth = Math.max(2, (Math.PI * 2 * R) / BARS * 0.45);
         ctx.beginPath();
         ctx.moveTo(cx + Math.cos(a) * R, cy + Math.sin(a) * R);
@@ -91,7 +98,7 @@ export function SplashScreen({ onDone }: { onDone: () => void }) {
       }
       // Svítící kruh
       ctx.shadowColor = CYAN;
-      ctx.strokeStyle = `rgba(0, 243, 255, ${0.5 + kick * 0.5})`;
+      ctx.strokeStyle = `rgba(1,218,246, ${0.5 + kick * 0.5})`;
       ctx.lineWidth = 2;
       ctx.beginPath();
       ctx.arc(cx, cy, Math.max(1, R - 4), 0, Math.PI * 2);
@@ -103,7 +110,7 @@ export function SplashScreen({ onDone }: { onDone: () => void }) {
         for (let n = 0; n < 40; n++) {
           const a = Math.random() * Math.PI * 2;
           const sp = 80 + Math.random() * 160;
-          sparks.push({ x: cx + Math.cos(a) * R, y: cy + Math.sin(a) * R, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: 1, hue: 185 + Math.random() * 140 });
+          sparks.push({ x: cx + Math.cos(a) * R, y: cy + Math.sin(a) * R, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: 1, hue: Math.random() });
         }
       }
       ctx.shadowBlur = 8;
@@ -112,7 +119,7 @@ export function SplashScreen({ onDone }: { onDone: () => void }) {
         s.life -= 1 / 50;
         if (s.life <= 0) { sparks.splice(i, 1); continue; }
         s.x += s.vx / 60; s.y += s.vy / 60; s.vx *= 0.96; s.vy *= 0.96;
-        ctx.fillStyle = `hsla(${s.hue}, 100%, 65%, ${s.life})`;
+        ctx.fillStyle = `rgba(${brandMix(s.hue)}, ${s.life})`;
         ctx.shadowColor = ctx.fillStyle;
         ctx.beginPath();
         ctx.arc(s.x, s.y, 1.8, 0, Math.PI * 2);
@@ -128,7 +135,7 @@ export function SplashScreen({ onDone }: { onDone: () => void }) {
       onClick={finish}
       className="fixed inset-0 z-[100] flex flex-col items-center justify-center cursor-pointer select-none overflow-hidden"
       style={{
-        background: 'radial-gradient(circle at 50% 42%, #10224a 0%, #060d22 60%, #03060f 100%)',
+        background: 'radial-gradient(circle at 50% 42%, #152e50 0%, #0b1733 45%, #061026 100%)',
         opacity: leaving ? 0 : 1,
         transition: `opacity ${FADE_MS}ms ease-out`,
       }}
@@ -152,7 +159,7 @@ export function SplashScreen({ onDone }: { onDone: () => void }) {
 
       <div
         className="absolute left-0 right-0 text-center font-black text-3xl text-white"
-        style={{ top: 'calc(42% + 43vmin)', animation: 'grid-title .9s ease-out .4s both', textShadow: '0 0 12px rgba(0,243,255,.9), 0 0 28px rgba(248,0,255,.5)' }}
+        style={{ top: 'calc(42% + 43vmin)', animation: 'grid-title .9s ease-out .4s both', textShadow: '0 0 12px rgba(1,218,246,.9), 0 0 28px rgba(228,37,165,.5)' }}
       >
         GRID
       </div>
@@ -161,7 +168,7 @@ export function SplashScreen({ onDone }: { onDone: () => void }) {
         className="absolute left-0 right-0 flex justify-center"
         style={{ top: 'calc(42% + 43vmin + 46px)', animation: 'grid-logo-in .9s ease-out .7s both' }}
       >
-        <img src="/logo.png" alt="Zažij VR" className="h-10 w-auto object-contain drop-shadow-[0_0_8px_rgba(0,243,255,0.55)]" draggable={false} />
+        <img src="/logo.png" alt="Zažij VR" className="h-10 w-auto object-contain drop-shadow-[0_0_8px_rgba(1,218,246,0.55)]" draggable={false} />
       </div>
     </div>
   );

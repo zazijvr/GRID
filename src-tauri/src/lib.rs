@@ -3,6 +3,8 @@
 // (pevné adresy – stránka nemůže nechat otevřít nic jiného) a aktualizace na počítači (updater.rs).
 
 #[cfg(desktop)]
+mod open_files;
+#[cfg(desktop)]
 mod updater;
 
 #[cfg(desktop)]
@@ -68,7 +70,10 @@ fn open_external(url: &str) -> std::io::Result<()> {
 #[cfg(desktop)]
 fn handlers() -> impl Fn(tauri::ipc::Invoke) -> bool + Send + Sync + 'static {
     updater::remember_install();
-    tauri::generate_handler![open_website, updater::open_releases, updater::update_mode, updater::self_update, updater::restart_app]
+    tauri::generate_handler![
+        open_website, updater::open_releases, updater::update_mode, updater::self_update, updater::restart_app,
+        open_files::take_open_files, open_files::read_open_file
+    ]
 }
 
 #[cfg(mobile)]
@@ -78,7 +83,20 @@ fn handlers() -> impl Fn(tauri::ipc::Invoke) -> bool + Send + Sync + 'static {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
+    let builder = tauri::Builder::default();
+    // Počítač: jen jeden GRID – další spuštění (otevření souborů ze systému) předá soubory běžícímu oknu.
+    // Plugin musí být zaregistrovaný jako první.
+    #[cfg(desktop)]
+    let builder = {
+        let opened = open_files::OpenFiles::default();
+        open_files::from_startup(&opened);
+        #[cfg(target_os = "linux")]
+        std::thread::spawn(open_files::fix_desktop_entry);
+        builder
+            .plugin(tauri_plugin_single_instance::init(|app, argv, cwd| open_files::from_second_instance(app, argv, cwd)))
+            .manage(opened)
+    };
+    builder
         .invoke_handler(handlers())
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

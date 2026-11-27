@@ -28,6 +28,9 @@ android {
     }
     buildTypes {
         getByName("debug") {
+            // Testovací build: jiné ID aplikace → nainstaluje se vedle verze z Google Play
+            // (vlastní název „GRID TST“ a ikona se štítkem TST jsou v src/debug/res; ID viz androidComponents níž)
+            versionNameSuffix = "-test"
             manifestPlaceholders["usesCleartextTraffic"] = "true"
             isDebuggable = true
             isJniDebuggable = true
@@ -57,6 +60,15 @@ android {
     }
     buildFeatures {
         buildConfig = true
+    }
+}
+
+// Testovací (debug) build má vlastní ID aplikace, aby se nainstaloval vedle verze z Google Play.
+// Přes androidComponents: přímé nastavení v buildTypes Tauri CLI při každém buildu smaže
+// (řádky s ID aplikace přepisuje podle identifier v tauri.conf.json).
+androidComponents {
+    onVariants(selector().withBuildType("debug")) { variant ->
+        variant.applicationId.set("com.zvr_grid.app.test")
     }
 }
 

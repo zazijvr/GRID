@@ -5,6 +5,13 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Budík: přesný čas (Android 12+ povoluje uživatel), zvonicí obrazovka přes zámek,
+         obnovení budíků po restartu, probuzení telefonu a vibrace -->
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <uses-permission android:name="android.permission.VIBRATE" />
 
     <!-- AndroidTV support -->
     <uses-feature android:name="android.software.leanback" android:required="false" />
@@ -37,6 +44,37 @@
             android:name=".MediaPlaybackService"
             android:exported="false"
             android:foregroundServiceType="mediaPlayback" />
+
+        <!-- Budík: zvonění (služba), zvonicí obrazovka přes zamčený telefon, plánování -->
+        <service
+            android:name=".AlarmRingService"
+            android:exported="false"
+            android:foregroundServiceType="mediaPlayback" />
+        <activity
+            android:name=".AlarmActivity"
+            android:exported="false"
+            android:showWhenLocked="true"
+            android:turnScreenOn="true"
+            android:excludeFromRecents="true"
+            android:launchMode="singleInstance"
+            android:taskAffinity=""
+            android:configChanges="orientation|screenSize|keyboardHidden"
+            android:theme="@style/Theme.zvr_grid" />
+        <receiver
+            android:name=".AlarmReceiver"
+            android:exported="false" />
+        <!-- Jen systémové události (restart, aktualizace, změna času) – sám nic nespouští -->
+        <receiver
+            android:name=".AlarmBootReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+                <action android:name="android.intent.action.TIME_SET" />
+                <action android:name="android.intent.action.TIMEZONE_CHANGED" />
+                <action android:name="android.app.action.SCHEDULE_EXACT_ALARM_PERMISSION_STATE_CHANGED" />
+            </intent-filter>
+        </receiver>
 
         <provider
           android:name="androidx.core.content.FileProvider"

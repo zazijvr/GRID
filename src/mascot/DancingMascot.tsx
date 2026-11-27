@@ -2,6 +2,11 @@ import { BODY_PATHS, CORE, CYAN, HEAD_3Q, HEAD_PIVOT, PINK } from './gridMascot'
 
 const BEAT_S = 0.5; // 120 BPM
 
+// Tloušťka čar podle ilustrací ZažijVR (02-ilustrace): čára ≈ 1,4 % výšky kresby, světlé jádro 0,36× čáry,
+// záře ≈ 1,9× čáry (drop-shadow). Dřív byl panáček GRIDu kreslený skoro dvakrát silněji.
+const W = 3.4;
+const CORE_W = W * 0.36;
+
 /**
  * VR panáček se sluchátky (hlava natočená do tří čtvrtin jako na ikoně), který pokyvuje hlavou
  * do rytmu – na každou dobu kývne dolů a vrátí se; tělo lehce pruží. Úvodní animace a prázdný playlist.
@@ -35,27 +40,27 @@ export function DancingMascot({ className = '', beat = BEAT_S, headOnly = false 
         strokeLinecap="round"
         strokeLinejoin="round"
         className={className}
-        style={{ filter: `drop-shadow(0 0 6px ${CYAN}) drop-shadow(0 0 14px rgba(0,243,255,.45))`, overflow: 'visible' }}
+        style={{ filter: `drop-shadow(0 0 3px ${CYAN}) drop-shadow(0 0 9px rgba(1,218,246,.5))`, overflow: 'visible' }}
         aria-hidden="true"
       >
         {!headOnly && (
           <g className="grid-dm-body">
-            {lines(BODY_PATHS, CYAN, 5.5)}
-            {lines(BODY_PATHS, CORE, 1.65, 0.75)}
+            {lines(BODY_PATHS, CYAN, W)}
+            {lines(BODY_PATHS, CORE, CORE_W, 0.9)}
           </g>
         )}
         <g className="grid-dm-head">
-          {lines(HEAD_3Q.head, CYAN, 5.5)}
-          {lines(HEAD_3Q.head, CORE, 1.65, 0.75)}
+          {lines(HEAD_3Q.head, CYAN, W)}
+          {lines(HEAD_3Q.head, CORE, CORE_W, 0.9)}
           <g transform={HEAD_3Q.faceTransform}>
-            {lines(HEAD_3Q.face, CYAN, 5.5)}
-            {lines(HEAD_3Q.face, CORE, 1.65, 0.75)}
+            {lines(HEAD_3Q.face, CYAN, W)}
+            {lines(HEAD_3Q.face, CORE, CORE_W, 0.9)}
           </g>
-          {lines(HEAD_3Q.band, CYAN, 6)}
-          {lines(HEAD_3Q.band, CORE, 1.8, 0.75)}
-          {lines(HEAD_3Q.cups, CYAN, 6.5)}
-          {lines(HEAD_3Q.cups, CORE, 1.9, 0.75)}
-          {lines(HEAD_3Q.accent, PINK, 8)}
+          {lines(HEAD_3Q.band, CYAN, W)}
+          {lines(HEAD_3Q.band, CORE, CORE_W, 0.9)}
+          {lines(HEAD_3Q.cups, CYAN, W)}
+          {lines(HEAD_3Q.cups, CORE, CORE_W, 0.9)}
+          {lines(HEAD_3Q.accent, PINK, W * 1.4)}{lines(HEAD_3Q.accent, CORE, CORE_W, 0.9)}
         </g>
       </svg>
     </>

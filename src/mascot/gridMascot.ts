@@ -2,9 +2,11 @@
 // (scripts/gen-android-icon.mjs je vykreslí do PNG). Souřadnice ve viewBoxu 0 0 256 256.
 // Hlava (head) se v animaci kývá kolem krku – bod HEAD_PIVOT.
 
-export const CYAN = '#00f3ff';
-export const CORE = '#e6ffff';
-export const PINK = '#f72585';
+// Firemní barvy ilustrací ZažijVR: čára neon #01daf6, světlé jádro #d2fdff.
+// Ilustrace jsou jednobarevné (rozhodnutí 2026-11-23) → akcent mušlí je taky neon, ne růžový.
+export const CYAN = '#01daf6';
+export const CORE = '#d2fdff';
+export const PINK = '#01daf6';
 
 export const HEAD_PIVOT = { x: 128, y: 132 };
 

@@ -67,16 +67,19 @@ echo "🖼️ Stahuji ikonu napřímo k aplikaci..."
 curl -sL "${AUTH_ARGS[@]}" "https://raw.githubusercontent.com/zazijvr/GRID/main/public/GRID_icon_desktop.png" -o "$ICON_PATH" || true
 
 echo "🔗 Vytvářím zástupce na ploše a v menu..."
+# Typy souborů, které GRID umí otevřít (%F = všechny vybrané soubory jednomu spuštění)
+GRID_MIME="audio/mpeg;audio/mp3;audio/x-mp3;audio/x-mpeg;audio/flac;audio/x-flac;audio/ogg;audio/vorbis;audio/x-vorbis;audio/x-vorbis+ogg;audio/opus;audio/x-opus+ogg;audio/wav;audio/x-wav;audio/vnd.wave;audio/mp4;audio/x-m4a;audio/aac;audio/x-aac;audio/webm;audio/x-ms-wma;"
 cat <<EOF > "$DESKTOP_DIR/zvr-grid.desktop"
 [Desktop Entry]
 Name=Zažij VR GRID
 Comment=Hudební přehrávač GRID
-Exec=$FINAL_EXEC
+Exec="$FINAL_EXEC" %F
 Icon=$ICON_PATH
 Terminal=false
 Type=Application
 Categories=AudioVideo;Audio;Player;
 Keywords=music;player;vr;grid;
+MimeType=$GRID_MIME
 StartupNotify=true
 EOF
 

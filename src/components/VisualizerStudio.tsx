@@ -55,14 +55,16 @@ const EFFECTS: Array<() => Effect> = [createRing, createWave, createEqualizer, c
 const EFFECT_NAMES = ['Neon Ring', 'Neon Wave', 'Neon Equalizer', 'Neon Hex', 'Neon Lasers', 'Neon Galaxy'];
 const AUTO_CYCLE_S = 40;
 const SETTINGS_KEY = 'zvr-grid-visualizer';
+/** Výchozí efekt při prvním spuštění: Neon Equalizer (pak si aplikace pamatuje poslední volbu) */
+const DEFAULT_EFFECT = 2;
 
 const readSettings = (): { effect: number; auto: boolean } => {
   try {
     const s = JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}');
-    const effect = Number.isInteger(s.effect) && s.effect >= 0 && s.effect < EFFECTS.length ? s.effect : 0;
+    const effect = Number.isInteger(s.effect) && s.effect >= 0 && s.effect < EFFECTS.length ? s.effect : DEFAULT_EFFECT;
     return { effect, auto: s.auto === true };
   } catch {
-    return { effect: 0, auto: false };
+    return { effect: DEFAULT_EFFECT, auto: false };
   }
 };
 

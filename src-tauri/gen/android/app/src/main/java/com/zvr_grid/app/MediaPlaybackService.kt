@@ -181,7 +181,7 @@ class MediaPlaybackService : Service() {
     return NotificationCompat.Builder(this, CHANNEL_ID)
       .setSmallIcon(R.drawable.ic_stat_grid) // silueta panáčka ve stavovém řádku
       .setLargeIcon(artwork)
-      .setColor(0xFF00F3FF.toInt()) // azurová GRIDu
+      .setColor(0xFF01DAF6.toInt()) // neon ZažijVR
       .setColorized(true) // starší Androidy obarví celé oznámení podle obrázku / barvy
       .setContentTitle(title.ifEmpty { "GRID" })
       .setContentText("Zažij VR GRID")

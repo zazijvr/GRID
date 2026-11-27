@@ -8,10 +8,13 @@ import { startDrag } from './utils/drag';
 import { SplashScreen } from './components/SplashScreen';
 import { MobileLayout, type MobileSheet } from './components/MobileLayout';
 import { PlaylistsPanel } from './components/PlaylistsPanel';
+import { watchOpenedFiles } from './platform/openFiles';
+import { BUILTIN_TRACKS } from './audio/trackStore';
 import { isAndroidApp, openWebsiteAndroid, postPlaybackState, setImmersive } from './platform/android';
 import { SpectrumVisualizer } from './components/SpectrumVisualizer';
 import { useRadio } from './radio/useRadio';
 import { RadioPanel } from './radio/RadioPanel';
+import { AlarmPanel } from './alarm/AlarmPanel';
 import { useUpdate } from './update/useUpdate';
 import { version as APP_VERSION } from '../package.json';
 import { UpdateBadge, UpdatePanel } from './update/UpdatePanel';
@@ -62,6 +65,7 @@ function App() {
     savePlaylistAs,
     loadSavedPlaylist,
     deleteSavedPlaylist,
+    isLoaded,
   } = useAudioPlayer();
 
   // ── Rádio: když hraje stanice, ovládání (play, další, předchozí) patří jí ──
@@ -301,6 +305,17 @@ function App() {
     if (fileInputOpenRef.current) fileInputOpenRef.current.value = '';
   };
 
+  // Počítač: skladby otevřené ze systému nahradí aktuální výběr (jako tlačítko Otevřít).
+  // Až po načtení playlistu z minula – jinak by ho načtení přepsalo zpátky.
+  const openFilesRef = useRef(openFiles);
+  openFilesRef.current = openFiles;
+  const showTrackListRef = useRef(showTrackList);
+  showTrackListRef.current = showTrackList;
+  useEffect(() => {
+    if (!isLoaded || !isTauri() || isMobile) return;
+    return watchOpenedFiles((files) => { openFilesRef.current(files); showTrackListRef.current(); });
+  }, [isLoaded]);
+
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     setIsDragging(false);
@@ -364,6 +379,13 @@ function App() {
     </div>
   );
 
+  // Budík (jen aplikace pro Android): skladby z playlistu i uložených playlistů, aktuální playlist, oblíbené stanice
+  const alarmTracks = useMemo(() => {
+    const seen = new Set<string>();
+    return [...tracks, ...savedPlaylists.flatMap((pl) => pl.tracks), ...BUILTIN_TRACKS].filter((t) => !seen.has(t.id) && !!seen.add(t.id));
+  }, [tracks, savedPlaylists]);
+  const alarmPlaylist = useMemo(() => ({ name: currentPlaylistName, tracks }), [currentPlaylistName, tracks]);
+
   // ── Telefon: visualizer jako hlavní obrazovka, seznam a ekvalizér ve vysouvacích panelech ──
   if (isMobile) {
     return (
@@ -372,6 +394,7 @@ function App() {
           audioRef={outputRef}
           radioOn={radioOn}
           radioPanel={<RadioPanel radio={radio} onPlayed={() => setMobileSheet('none')} />}
+          alarmPanel={isAndroidApp() ? <AlarmPanel tracks={alarmTracks} playlist={alarmPlaylist} stations={radio.favourites} /> : undefined}
           tracks={tracks}
           currentIndex={currentIndex}
           currentTrack={currentTrack}
@@ -416,7 +439,7 @@ function App() {
     <div
       className={`relative w-full h-full flex flex-row overflow-hidden transition-colors
         ${!isMobile ? 'border border-cyan-500/30 rounded-lg shadow-2xl' : ''}
-        ${isDragging ? 'border-pink-500/80 shadow-[0_0_20px_rgba(248,0,255,0.4)]' : ''}
+        ${isDragging ? 'border-pink-500/80 shadow-[0_0_20px_rgba(228,37,165,0.4)]' : ''}
       `}
       // Telefon: obsah mimo systémové lišty (aplikace kreslí edge-to-edge)
       style={isMobile ? { paddingTop: 'env(safe-area-inset-top, 0px)', paddingBottom: 'env(safe-area-inset-bottom, 0px)' } : undefined}
@@ -434,9 +457,9 @@ function App() {
           <div
             data-tauri-drag-region
             onPointerDown={startDragging}
-            className="h-10 shrink-0 bg-gradient-to-r from-slate-950 via-slate-900 to-slate-950 flex items-center justify-between px-3 border-b border-cyan-500/30 select-none cursor-move shadow-[0_2px_10px_rgba(0,243,255,0.1)]"
+            className="h-10 shrink-0 bg-gradient-to-r from-slate-950 via-slate-900 to-slate-950 flex items-center justify-between px-3 border-b border-cyan-500/30 select-none cursor-move shadow-[0_2px_10px_rgba(1,218,246,0.1)]"
           >
-            <div data-tauri-drag-region className="flex items-center gap-3 text-cyan-400 font-bold text-sm tracking-widest uppercase pointer-events-none drop-shadow-[0_0_5px_rgba(0,243,255,0.6)]">
+            <div data-tauri-drag-region className="flex items-center gap-3 text-cyan-400 font-bold text-sm tracking-widest uppercase pointer-events-none drop-shadow-[0_0_5px_rgba(1,218,246,0.6)]">
               <button
                 type="button"
                 onClick={openWebsite}
@@ -491,17 +514,17 @@ function App() {
           <div className="h-16 w-full flex flex-col items-center justify-center text-center z-10 px-2 mt-2">
             {currentTrack ? (
               <>
-                <h2 className="text-white font-semibold truncate w-full text-base tracking-wide drop-shadow-[0_0_8px_rgba(0,243,255,0.4)]">
+                <h2 className="text-white font-semibold truncate w-full text-base tracking-wide drop-shadow-[0_0_8px_rgba(1,218,246,0.4)]">
                   {currentTrack.name}
                 </h2>
                 <div className="text-cyan-400/70 text-xs mt-1 uppercase tracking-widest flex items-center gap-2">
                   {isPlaying ? (
                     <span className="flex items-center gap-1.5">
                       <span className="flex items-end gap-px h-3 overflow-hidden pb-px">
-                        <span className="eq-bar drop-shadow-[0_0_4px_rgba(0,243,255,0.8)]" style={{ animationDelay: '0.0s', animationDuration: '0.4s' }} />
-                        <span className="eq-bar drop-shadow-[0_0_4px_rgba(248,0,255,0.8)] !bg-pink-500" style={{ animationDelay: '0.2s', animationDuration: '0.3s' }} />
-                        <span className="eq-bar drop-shadow-[0_0_4px_rgba(0,243,255,0.8)]" style={{ animationDelay: '0.4s', animationDuration: '0.6s' }} />
-                        <span className="eq-bar drop-shadow-[0_0_4px_rgba(248,0,255,0.8)] !bg-pink-500" style={{ animationDelay: '0.1s', animationDuration: '0.5s' }} />
+                        <span className="eq-bar drop-shadow-[0_0_4px_rgba(1,218,246,0.8)]" style={{ animationDelay: '0.0s', animationDuration: '0.4s' }} />
+                        <span className="eq-bar drop-shadow-[0_0_4px_rgba(228,37,165,0.8)] !bg-pink-500" style={{ animationDelay: '0.2s', animationDuration: '0.3s' }} />
+                        <span className="eq-bar drop-shadow-[0_0_4px_rgba(1,218,246,0.8)]" style={{ animationDelay: '0.4s', animationDuration: '0.6s' }} />
+                        <span className="eq-bar drop-shadow-[0_0_4px_rgba(228,37,165,0.8)] !bg-pink-500" style={{ animationDelay: '0.1s', animationDuration: '0.5s' }} />
                       </span>
                       {radioOn ? (radio.status === 'loading' ? 'Připojuji' : 'Rádio živě') : 'Playing'}
                     </span>
@@ -518,7 +541,7 @@ function App() {
             <div className="w-full mt-4 h-10 flex items-center justify-center gap-3 z-10">
               <span className="h-px flex-1 bg-gradient-to-r from-transparent to-cyan-500/40" />
               <span className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.25em] text-pink-400">
-                <span className={`w-2 h-2 rounded-full bg-pink-500 shadow-[0_0_8px_#f800ff] ${radio.status === 'playing' ? 'animate-pulse' : 'opacity-40'}`} />
+                <span className={`w-2 h-2 rounded-full bg-pink-500 shadow-[0_0_8px_#e425a5] ${radio.status === 'playing' ? 'animate-pulse' : 'opacity-40'}`} />
                 Živě
               </span>
               <span className="h-px flex-1 bg-gradient-to-l from-transparent to-cyan-500/40" />
@@ -551,14 +574,14 @@ function App() {
             >
               <div className="w-full h-2 bg-slate-950/80 rounded-full relative border border-white/5 pointer-events-none">
                 <div
-                  className="absolute top-0 left-0 h-full rounded-full bg-gradient-to-r from-cyan-400 via-pink-400 to-pink-500 transition-all duration-100 ease-linear shadow-[0_0_12px_rgba(248,0,255,0.8)] pointer-events-none"
+                  className="absolute top-0 left-0 h-full rounded-full bg-gradient-to-r from-cyan-400 via-pink-400 to-pink-500 transition-all duration-100 ease-linear shadow-[0_0_12px_rgba(228,37,165,0.8)] pointer-events-none"
                   style={{ width: `${duration > 0 ? ((scrubbingTime !== null ? scrubbingTime : currentTime) / duration) * 100 : 0}%` }}
                 >
                   <div className="absolute right-0 top-0 bottom-0 w-2 bg-white/50 blur-[2px]" />
                 </div>
               </div>
               <div
-                className={`absolute top-1/2 -translate-y-1/2 w-4 h-4 rounded-full pointer-events-none z-20 flex items-center justify-center transition-all duration-150 ${scrubbingTime !== null ? 'bg-white/90 border-2 border-pink-500 shadow-[0_0_15px_rgba(248,0,255,0.8)] scale-[1.3]' : 'bg-pink-500/90 border border-white/50 shadow-[0_0_8px_rgba(248,0,255,0.5)] group-hover:scale-110 group-hover:bg-pink-400'}`}
+                className={`absolute top-1/2 -translate-y-1/2 w-4 h-4 rounded-full pointer-events-none z-20 flex items-center justify-center transition-all duration-150 ${scrubbingTime !== null ? 'bg-white/90 border-2 border-pink-500 shadow-[0_0_15px_rgba(228,37,165,0.8)] scale-[1.3]' : 'bg-pink-500/90 border border-white/50 shadow-[0_0_8px_rgba(228,37,165,0.5)] group-hover:scale-110 group-hover:bg-pink-400'}`}
                 style={{ left: `calc(${duration > 0 ? ((scrubbingTime !== null ? scrubbingTime : currentTime) / duration) * 100 : 0}% - 8px)` }}
               >
                 <div className={`w-1.5 h-1.5 rounded-full ${scrubbingTime !== null ? 'bg-pink-500' : 'bg-white'}`} />
@@ -583,25 +606,25 @@ function App() {
           <div className="flex items-center justify-between">
             <button
               onClick={toggleShuffle}
-              className={`p-2 transition-all duration-300 rounded-full ${shuffle ? 'text-pink-500 bg-pink-500/10 shadow-[0_0_15px_rgba(248,0,255,0.4)] drop-shadow-[0_0_5px_#f800ff]' : 'text-slate-500 hover:text-cyan-400 hover:bg-cyan-500/10'}`}
+              className={`p-2 transition-all duration-300 rounded-full ${shuffle ? 'text-pink-500 bg-pink-500/10 shadow-[0_0_15px_rgba(228,37,165,0.4)] drop-shadow-[0_0_5px_#e425a5]' : 'text-slate-500 hover:text-cyan-400 hover:bg-cyan-500/10'}`}
             >
               <Shuffle size={18} />
             </button>
 
             <div className="flex items-center gap-5">
-              <button onClick={prevTrack} className="text-slate-300 hover:text-cyan-400 drop-shadow-md hover:drop-shadow-[0_0_8px_rgba(0,243,255,0.8)] transition-all hover:-translate-x-0.5">
+              <button onClick={prevTrack} className="text-slate-300 hover:text-cyan-400 drop-shadow-md hover:drop-shadow-[0_0_8px_rgba(1,218,246,0.8)] transition-all hover:-translate-x-0.5">
                 <SkipBack size={26} fill="currentColor" />
               </button>
 
               <button
                 onClick={togglePlay}
-                className="w-16 h-16 rounded-full bg-gradient-to-br from-slate-800 to-slate-900 border-2 border-cyan-500/40 flex items-center justify-center text-cyan-400 hover:border-cyan-400 hover:text-cyan-300 transition-all duration-300 hover:scale-105 shadow-[0_0_15px_rgba(0,243,255,0.2)] hover:shadow-[0_0_25px_rgba(0,243,255,0.6)] relative group"
+                className="w-16 h-16 rounded-full bg-gradient-to-br from-slate-800 to-slate-900 border-2 border-cyan-500/40 flex items-center justify-center text-cyan-400 hover:border-cyan-400 hover:text-cyan-300 transition-all duration-300 hover:scale-105 shadow-[0_0_15px_rgba(1,218,246,0.2)] hover:shadow-[0_0_25px_rgba(1,218,246,0.6)] relative group"
               >
                 <div className="absolute inset-0 rounded-full bg-cyan-400/20 blur-md opacity-0 group-hover:opacity-100 transition-opacity" />
                 {isPlaying ? <Pause size={28} fill="currentColor" className="z-10" /> : <Play size={28} fill="currentColor" className="ml-1 z-10" />}
               </button>
 
-              <button onClick={nextTrack} className="text-slate-300 hover:text-cyan-400 drop-shadow-md hover:drop-shadow-[0_0_8px_rgba(0,243,255,0.8)] transition-all hover:translate-x-0.5">
+              <button onClick={nextTrack} className="text-slate-300 hover:text-cyan-400 drop-shadow-md hover:drop-shadow-[0_0_8px_rgba(1,218,246,0.8)] transition-all hover:translate-x-0.5">
                 <SkipForward size={26} fill="currentColor" />
               </button>
             </div>
@@ -625,14 +648,14 @@ function App() {
                 <button
                   onClick={openVisualizer}
                   title="Visualizer Studio"
-                  className="p-2 transition-all duration-300 rounded-full text-slate-500 hover:text-cyan-400 hover:bg-cyan-400/10 hover:shadow-[0_0_15px_rgba(0,243,255,0.4)]"
+                  className="p-2 transition-all duration-300 rounded-full text-slate-500 hover:text-cyan-400 hover:bg-cyan-400/10 hover:shadow-[0_0_15px_rgba(1,218,246,0.4)]"
                 >
                   <MonitorPlay size={18} />
                 </button>
               )}
               <button
                 onClick={cycleRepeat}
-                className={`p-2 transition-all duration-300 rounded-full ${repeatMode !== 'none' ? 'text-cyan-400 bg-cyan-400/10 shadow-[0_0_15px_rgba(0,243,255,0.4)] drop-shadow-[0_0_5px_#00f3ff]' : 'text-slate-500 hover:text-pink-500 hover:bg-pink-500/10'}`}
+                className={`p-2 transition-all duration-300 rounded-full ${repeatMode !== 'none' ? 'text-cyan-400 bg-cyan-400/10 shadow-[0_0_15px_rgba(1,218,246,0.4)] drop-shadow-[0_0_5px_#01daf6]' : 'text-slate-500 hover:text-pink-500 hover:bg-pink-500/10'}`}
               >
                 {repeatMode === 'one' ? <Repeat1 size={18} /> : <Repeat size={18} />}
               </button>
@@ -669,7 +692,7 @@ function App() {
                 />
               </div>
               <div
-                className={`absolute top-1/2 -translate-y-1/2 w-4 h-4 rounded-full pointer-events-none z-20 flex items-center justify-center transition-all duration-150 ${volume > 0 ? 'bg-cyan-400 border border-white/50 shadow-[0_0_8px_rgba(0,243,255,0.5)] group-hover:bg-cyan-300 group-hover:scale-110 group-active:bg-white/90 group-active:border-2 group-active:border-cyan-400 group-active:shadow-[0_0_15px_rgba(0,243,255,0.8)] group-active:scale-[1.3]' : 'bg-slate-700 border border-slate-500'}`}
+                className={`absolute top-1/2 -translate-y-1/2 w-4 h-4 rounded-full pointer-events-none z-20 flex items-center justify-center transition-all duration-150 ${volume > 0 ? 'bg-cyan-400 border border-white/50 shadow-[0_0_8px_rgba(1,218,246,0.5)] group-hover:bg-cyan-300 group-hover:scale-110 group-active:bg-white/90 group-active:border-2 group-active:border-cyan-400 group-active:shadow-[0_0_15px_rgba(1,218,246,0.8)] group-active:scale-[1.3]' : 'bg-slate-700 border border-slate-500'}`}
                 style={{ left: `calc(${volume * 100}% - 8px)` }}
               >
                 <div className="w-1.5 h-1.5 rounded-full bg-white group-active:bg-cyan-500" />
@@ -759,7 +782,7 @@ function App() {
 
           <button
             onClick={() => fileInputRef.current?.click()}
-            className="flex-1 flex items-center justify-center gap-2 py-2.5 px-3 rounded-md bg-slate-900 border border-slate-700 text-slate-300 hover:border-cyan-500/60 hover:text-cyan-400 hover:shadow-[0_0_12px_rgba(0,243,255,0.2)] transition-all duration-300 text-xs font-bold uppercase tracking-[0.15em]"
+            className="flex-1 flex items-center justify-center gap-2 py-2.5 px-3 rounded-md bg-slate-900 border border-slate-700 text-slate-300 hover:border-cyan-500/60 hover:text-cyan-400 hover:shadow-[0_0_12px_rgba(1,218,246,0.2)] transition-all duration-300 text-xs font-bold uppercase tracking-[0.15em]"
           >
             <FolderPlus size={15} />
             Přidat
@@ -767,7 +790,7 @@ function App() {
 
           <button
             onClick={() => fileInputOpenRef.current?.click()}
-            className="flex-1 flex items-center justify-center gap-2 py-2.5 px-3 rounded-md bg-gradient-to-r from-slate-800 to-slate-900 border border-cyan-500/30 text-cyan-400 hover:border-pink-500 hover:text-pink-400 hover:shadow-[0_0_15px_rgba(248,0,255,0.3)] transition-all duration-300 text-xs font-bold uppercase tracking-[0.2em]"
+            className="flex-1 flex items-center justify-center gap-2 py-2.5 px-3 rounded-md bg-gradient-to-r from-slate-800 to-slate-900 border border-cyan-500/30 text-cyan-400 hover:border-pink-500 hover:text-pink-400 hover:shadow-[0_0_15px_rgba(228,37,165,0.3)] transition-all duration-300 text-xs font-bold uppercase tracking-[0.2em]"
           >
             <FolderOpen size={15} className="drop-shadow-[0_0_5px_currentColor]" />
             Otevřít

@@ -78,7 +78,8 @@ Ikonu a hlavní grafiku lze přegenerovat: `python3 scripts/gen-store-assets.py`
 
 - Shromažďuje aplikace data? **Ne**
 - Sdílí data s třetími stranami? **Ne**
-- (Aplikace nemá síťovou komunikaci; skladby a playlisty jsou uložené jen v telefonu,
+- (Síť používá jen funkce Rádio – katalog Radio Browser a vysílání přímo ze serverů stanic, viz zásady bod 3a;
+  skladby a playlisty jsou uložené jen v telefonu,
   zálohování do cloudu je vypnuté.)
 
 ## Skládací telefony a tablety (`store/screenshots-skladaci/`)

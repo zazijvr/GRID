@@ -29,11 +29,11 @@ type PresetMeta = {
 
 const PRESETS_META: Record<EQPreset, PresetMeta> = {
   flat:   { label: 'Flat',   color: '#94a3b8', activeClass: 'bg-slate-700/80 text-slate-100 border-slate-400 shadow-[0_0_12px_rgba(148,163,184,0.3)]',   badgeClass: 'text-slate-400 border-slate-500 bg-slate-800' },
-  dance:  { label: 'Dance',  color: '#f472b6', activeClass: 'bg-pink-500/20 text-pink-300 border-pink-500 shadow-[0_0_15px_rgba(248,0,255,0.4)]',         badgeClass: 'text-pink-400 border-pink-500 bg-pink-500/10' },
+  dance:  { label: 'Dance',  color: '#f472b6', activeClass: 'bg-pink-500/20 text-pink-300 border-pink-500 shadow-[0_0_15px_rgba(228,37,165,0.4)]',         badgeClass: 'text-pink-400 border-pink-500 bg-pink-500/10' },
   energy: { label: 'Energy', color: '#fb923c', activeClass: 'bg-orange-500/20 text-orange-300 border-orange-500 shadow-[0_0_15px_rgba(251,146,60,0.4)]',  badgeClass: 'text-orange-400 border-orange-500 bg-orange-500/10' },
   epic:   { label: 'Epic',   color: '#fbbf24', activeClass: 'bg-amber-500/20 text-amber-300 border-amber-500 shadow-[0_0_15px_rgba(251,191,36,0.4)]',   badgeClass: 'text-amber-400 border-amber-500 bg-amber-500/10' },
   relax:  { label: 'Relax',  color: '#34d399', activeClass: 'bg-emerald-500/20 text-emerald-300 border-emerald-500 shadow-[0_0_15px_rgba(52,211,153,0.4)]', badgeClass: 'text-emerald-400 border-emerald-500 bg-emerald-500/10' },
-  vocal:  { label: 'Vocal',  color: '#22d3ee', activeClass: 'bg-cyan-500/20 text-cyan-300 border-cyan-500 shadow-[0_0_15px_rgba(0,243,255,0.4)]',         badgeClass: 'text-cyan-400 border-cyan-500 bg-cyan-500/10' },
+  vocal:  { label: 'Vocal',  color: '#22d3ee', activeClass: 'bg-cyan-500/20 text-cyan-300 border-cyan-500 shadow-[0_0_15px_rgba(1,218,246,0.4)]',         badgeClass: 'text-cyan-400 border-cyan-500 bg-cyan-500/10' },
   custom: { label: 'Custom', color: '#c084fc', activeClass: 'bg-purple-500/20 text-purple-300 border-purple-500 shadow-[0_0_15px_rgba(168,85,247,0.4)]', badgeClass: 'text-purple-400 border-purple-500 bg-purple-500/10' },
 };
 
@@ -42,11 +42,12 @@ function bandLabel(hz: number): string {
 }
 
 function gainColor(gain: number): string {
-  if (gain > 5)  return '#f472b6'; // hot pink
-  if (gain > 1)  return '#22d3ee'; // cyan
-  if (gain >= 0) return '#475569'; // neutral slate
-  if (gain > -5) return '#818cf8'; // indigo
-  return '#a78bfa';                // deep purple (heavy cut)
+  // Firemní barvy: zesílení neon / růžová, ztlumení šedomodrá (bez fialové)
+  if (gain > 5)  return '#e425a5'; // výrazné zesílení – růžová
+  if (gain > 1)  return '#01daf6'; // zesílení – neon
+  if (gain >= 0) return '#3e5478'; // beze změny
+  if (gain > -5) return '#8d9bb5'; // ztlumení
+  return '#b7c2d6';                // výrazné ztlumení
 }
 
 interface EqualizerProps {

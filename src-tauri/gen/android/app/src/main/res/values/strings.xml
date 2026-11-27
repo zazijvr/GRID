@@ -6,4 +6,12 @@
     <string name="action_pause">Pauza</string>
     <string name="action_next">Další</string>
     <string name="action_prev">Předchozí</string>
+    <string name="alarm_channel">Budík</string>
+    <string name="alarm_title">Budík</string>
+    <string name="alarm_tap">Klepněte pro zvonění budíku</string>
+    <string name="alarm_snooze">Odložit o %1$d min</string>
+    <string name="alarm_dismiss">Vypnout</string>
+    <string name="alarm_snooze_channel">Odložený budík</string>
+    <string name="alarm_snoozed_title">Budík odložen – zazvoní v %1$s</string>
+    <string name="alarm_cancel_snooze">Zrušit odložení</string>
 </resources>

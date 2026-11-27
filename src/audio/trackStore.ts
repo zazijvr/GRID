@@ -10,6 +10,32 @@ export interface TrackMeta {
   name: string;
 }
 
+/**
+ * Skladby přibalené k aplikaci (public/audio) – v IndexedDB se neukládají, načítají se z aplikace.
+ * Id odpovídá pravidlům klíče pro budík ([A-Za-z0-9_-]).
+ */
+export const BUILTIN_PREFIX = 'builtin-';
+const BUILTIN_FILES: Array<[slug: string, name: string]> = [
+  ['wake-up-easy', 'Wake Up Easy'],
+  ['soft-analog-dawn', 'Soft Analog Dawn'],
+  ['softened-dawn', 'Softened Dawn'],
+  ['deep-focus-pulse', 'Deep Focus Pulse'],
+  ['midnight-focus', 'Midnight Focus'],
+];
+export const BUILTIN_TRACKS: TrackMeta[] = BUILTIN_FILES.map(([slug, name]) => ({ id: BUILTIN_PREFIX + slug, name }));
+export const BUILTIN_PLAYLIST_NAME = 'ZažijVR GRID';
+/** Výchozí skladba budíku a záložní skladba pro rádio */
+export const WAKE_UP_TRACK = BUILTIN_TRACKS[0];
+const isBuiltin = (id: string) => id.startsWith(BUILTIN_PREFIX);
+
+async function builtinBlob(id: string): Promise<Blob | null> {
+  if (!BUILTIN_TRACKS.some((t) => t.id === id)) return null;
+  const res = await fetch(`/audio/${id.slice(BUILTIN_PREFIX.length)}.mp3`);
+  if (!res.ok) return null;
+  const blob = await res.blob();
+  return blob.type.startsWith('audio/') ? blob : new Blob([blob], { type: 'audio/mpeg' });
+}
+
 const DB_NAME = 'zvr-grid-db';
 const DB_VERSION = 2;
 const LEGACY_STORE = 'playlist'; // v1
@@ -155,12 +181,14 @@ export async function putBlobs(entries: Array<{ id: string; blob: Blob }>) {
 }
 
 export async function getBlob(id: string): Promise<Blob | null> {
+  if (isBuiltin(id)) return builtinBlob(id);
   const db = await openDB();
   const blob = await request(db.transaction(BLOB_STORE, 'readonly').objectStore(BLOB_STORE).get(id));
   return blob instanceof Blob ? blob : null;
 }
 
 export async function deleteBlobs(ids: string[]) {
+  ids = ids.filter((id) => !isBuiltin(id));
   if (ids.length === 0) return;
   try {
     const db = await openDB();

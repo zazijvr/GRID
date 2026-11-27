@@ -1,10 +1,9 @@
 import React, { lazy, Suspense, useRef } from 'react';
-import { FolderOpen, FolderPlus, Library, ListMusic, Music, Radio as RadioIcon, Trash2, X } from 'lucide-react';
+import { AlarmClock, FolderOpen, FolderPlus, Library, ListMusic, Music, Radio as RadioIcon, Trash2, X } from 'lucide-react';
 import { PlaylistsPanel } from './PlaylistsPanel';
 import type { SavedPlaylist } from '../audio/trackStore';
 import type { Track } from '../hooks/useAudioPlayer';
 import { Equalizer, type EQPreset } from './Equalizer';
-import { DancingMascot } from '../mascot/DancingMascot';
 import { version as APP_VERSION } from '../../package.json';
 
 // Telefon: hlavní obrazovka „Teď hraje“ je visualizer přes celou plochu; seznam skladeb a ekvalizér
@@ -12,7 +11,7 @@ import { version as APP_VERSION } from '../../package.json';
 
 const VisualizerStudio = lazy(() => import('./VisualizerStudio').then((m) => ({ default: m.VisualizerStudio })));
 
-export type MobileSheet = 'none' | 'playlist' | 'eq' | 'music' | 'playlists' | 'radio';
+export type MobileSheet = 'none' | 'playlist' | 'eq' | 'music' | 'playlists' | 'radio' | 'alarm';
 
 const ACCEPT_AUDIO = 'audio/*,.wav,.mp3,.flac,.ogg,.oga,.opus,.m4a,.aac,.wma,.weba,.webm';
 
@@ -55,6 +54,8 @@ interface MobileLayoutProps {
   radioPanel: React.ReactNode;
   /** Živé vysílání – místo času značka „Živě“ */
   live: boolean;
+  /** Panel budíku – jen v aplikaci pro Android (budík zvoní nativně) */
+  alarmPanel?: React.ReactNode;
 }
 
 /** Vysouvací panel zespodu; zavře se tahem dolů za úchyt, klepnutím vedle nebo tlačítkem Zpět */
@@ -88,7 +89,7 @@ function BottomSheet({ open, onClose, height, title, children }: { open: boolean
       />
       <div
         ref={panelRef}
-        className={`fixed inset-x-0 bottom-0 z-50 flex flex-col rounded-t-3xl border-t border-cyan-400/30 bg-slate-950/95 shadow-[0_-10px_40px_rgba(0,243,255,0.15)] transition-transform duration-300 ease-out ${open ? 'translate-y-0' : 'translate-y-full pointer-events-none'}`}
+        className={`fixed inset-x-0 bottom-0 z-50 flex flex-col rounded-t-3xl border-t border-cyan-400/30 bg-slate-950/95 shadow-[0_-10px_40px_rgba(1,218,246,0.15)] transition-transform duration-300 ease-out ${open ? 'translate-y-0' : 'translate-y-full pointer-events-none'}`}
         style={{ height, paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
         aria-hidden={!open}
       >
@@ -144,8 +145,23 @@ export function MobileLayout(p: MobileLayoutProps) {
     </button>
   );
 
+  // Bez hudby i bez rádia: nad lištou nabídka, co pustit (místo dřívější uvítací obrazovky)
+  const empty = p.tracks.length === 0 && !p.radioOn;
   const bottomBar = (
-    <div className="grid grid-cols-4 gap-1 border-t border-white/10 pt-2">
+    <>
+    {empty && (
+      <div className="grid grid-cols-2 gap-2 pb-3">
+        <button onClick={() => pick(addRef)}
+          className="flex items-center justify-center gap-2 py-3 rounded-2xl border-2 border-cyan-400/60 bg-cyan-400/10 text-cyan-200 font-bold uppercase tracking-[0.12em] text-xs shadow-[0_0_16px_rgba(1,218,246,0.25)] active:scale-95">
+          <FolderPlus size={18} /> Přidat hudbu
+        </button>
+        <button onClick={() => p.setSheet('radio')}
+          className="flex items-center justify-center gap-2 py-3 rounded-2xl border-2 border-pink-500/50 bg-pink-500/10 text-pink-200 font-bold uppercase tracking-[0.12em] text-xs active:scale-95">
+          <RadioIcon size={18} /> Rádio
+        </button>
+      </div>
+    )}
+    <div className={`grid ${p.alarmPanel ? 'grid-cols-5' : 'grid-cols-4'} gap-1 border-t border-white/10 pt-2`}>
       {action(
         <svg width="20" height="20" viewBox="0 0 16 16" fill="none"><rect x="1" y="4" width="2" height="8" rx="1" fill="currentColor" /><rect x="5" y="1" width="2" height="14" rx="1" fill="currentColor" /><rect x="9" y="3" width="2" height="10" rx="1" fill="currentColor" /><rect x="13" y="5" width="2" height="6" rx="1" fill="currentColor" /></svg>,
         'Ekvalizér', () => p.setSheet(p.sheet === 'eq' ? 'none' : 'eq'), p.sheet === 'eq',
@@ -153,7 +169,9 @@ export function MobileLayout(p: MobileLayoutProps) {
       {action(<ListMusic size={20} />, 'Seznam', () => p.setSheet(p.sheet === 'playlist' ? 'none' : 'playlist'), p.sheet === 'playlist')}
       {action(<Music size={20} />, 'Hudba', () => p.setSheet(p.sheet === 'music' ? 'none' : 'music'), p.sheet === 'music')}
       {action(<RadioIcon size={20} />, 'Rádio', () => p.setSheet(p.sheet === 'radio' ? 'none' : 'radio'), p.sheet === 'radio' || p.radioOn)}
+      {p.alarmPanel && action(<AlarmClock size={20} />, 'Budík', () => p.setSheet(p.sheet === 'alarm' ? 'none' : 'alarm'), p.sheet === 'alarm')}
     </div>
+    </>
   );
 
   const inputs = (
@@ -182,43 +200,12 @@ export function MobileLayout(p: MobileLayoutProps) {
     </BottomSheet>
   );
 
-  // ── Prázdný playlist: uvítání ──
-  if (p.tracks.length === 0 && !p.radioOn) {
-    return (
-      <div
-        className="absolute inset-0 flex flex-col items-center justify-center gap-6 px-8 text-center"
-        style={{ background: 'radial-gradient(circle at 50% 40%, #10224a 0%, #060d22 60%, #03060f 100%)', paddingTop: 'env(safe-area-inset-top, 0px)', paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
-      >
-        {inputs}
-        <div className="absolute left-3" style={{ top: 'calc(env(safe-area-inset-top, 0px) + 10px)' }}>{logo}</div>
-        {playlistsSheet}
-        {radioSheet}
-        <DancingMascot className="w-48 h-48" />
-        <div>
-          <div className="text-2xl font-black tracking-[0.35em] text-white drop-shadow-[0_0_12px_rgba(0,243,255,0.8)]">GRID</div>
-          <p className="mt-2 text-sm text-slate-400">Přidej hudbu z telefonu nebo si pusť rádio – s neonovou vizualizací.</p>
-        </div>
-        <button
-          onClick={() => pick(addRef)}
-          className="flex items-center gap-2.5 px-7 py-3.5 rounded-2xl border-2 border-cyan-400/60 bg-cyan-400/10 text-cyan-200 font-bold uppercase tracking-[0.15em] text-sm shadow-[0_0_20px_rgba(0,243,255,0.3)] active:scale-95"
-        >
-          <FolderPlus size={20} /> Přidat hudbu
-        </button>
-        <button
-          onClick={() => p.setSheet('radio')}
-          className="-mt-2 flex items-center gap-2.5 px-7 py-3 rounded-2xl border-2 border-pink-500/50 bg-pink-500/10 text-pink-200 font-bold uppercase tracking-[0.15em] text-sm shadow-[0_0_18px_rgba(248,0,255,0.25)] active:scale-95"
-        >
-          <RadioIcon size={20} /> Poslouchat rádio
-        </button>
-        {p.savedPlaylists.length > 0 && (
-          <button onClick={() => p.setSheet('playlists')} className="flex items-center gap-2 text-sm text-purple-300 active:scale-95">
-            <Library size={18} /> Moje playlisty ({p.savedPlaylists.length})
-          </button>
-        )}
-        <div className="absolute inset-x-0 text-center text-[10px] tracking-[0.2em] text-slate-600" style={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + 12px)' }}>GRID {APP_VERSION}</div>
-      </div>
-    );
-  }
+  // Panel se vykreslí až při otevření (načte budíky z nativní části a hlídá změny jen když je vidět)
+  const alarmSheet = p.alarmPanel ? (
+    <BottomSheet open={p.sheet === 'alarm'} onClose={() => p.setSheet('none')} height="88%" title="Budík">
+      {p.sheet === 'alarm' && p.alarmPanel}
+    </BottomSheet>
+  ) : null;
 
   // ── Teď hraje: visualizer + vysouvací panely ──
   return (
@@ -329,6 +316,7 @@ export function MobileLayout(p: MobileLayoutProps) {
 
       {playlistsSheet}
       {radioSheet}
+      {alarmSheet}
 
       <BottomSheet open={p.sheet === 'eq'} onClose={() => p.setSheet('none')} height="58%" title="Ekvalizér">
         <Equalizer audioRef={p.audioRef} isOpen embedded onClose={() => p.setSheet('none')} onPresetChange={p.onPresetChange} />

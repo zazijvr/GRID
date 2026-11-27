@@ -91,7 +91,7 @@ function CountryPicker({ value, onChange, pinned, others, compact }: {
         <ChevronDown size={14} className={`shrink-0 text-slate-400 transition-transform ${open ? 'rotate-180' : ''}`} />
       </button>
       {open && (
-        <div className={`absolute z-30 ${room.up ? 'bottom-full mb-1' : 'top-full mt-1'} ${compact ? 'right-0 w-[230px]' : 'inset-x-0'} rounded-xl border border-cyan-500/40 bg-slate-950 shadow-[0_8px_30px_rgba(0,0,0,0.6),0_0_15px_rgba(0,243,255,0.15)] p-1.5`}>
+        <div className={`absolute z-30 ${room.up ? 'bottom-full mb-1' : 'top-full mt-1'} ${compact ? 'right-0 w-[230px]' : 'inset-x-0'} rounded-xl border border-cyan-500/40 bg-slate-950 shadow-[0_8px_30px_rgba(0,0,0,0.6),0_0_15px_rgba(1,218,246,0.15)] p-1.5`}>
           <input
             autoFocus
             value={filter}
