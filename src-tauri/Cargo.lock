@@ -5005,7 +5005,7 @@ dependencies = [
 
 [[package]]
 name = "zvr-grid"
-version = "1.4.0"
+version = "1.4.2"
 dependencies = [
  "open",
  "serde",
